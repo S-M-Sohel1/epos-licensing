@@ -60,6 +60,17 @@ export function describeExpiry(validUntil: Date, now = new Date()): string {
   return `${days} days remaining`;
 }
 
+/** 2999 -> "€29.99". Null/undefined means "not offered this way", shown as an em dash. */
+export function formatCents(cents: number | null | undefined): string {
+  if (cents == null) return "—";
+  return `€${(cents / 100).toFixed(2)}`;
+}
+
+/** The value a price <input> should default to: 2999 -> "29.99", null -> "". */
+export function centsToInputValue(cents: number | null | undefined): string {
+  return cents == null ? "" : (cents / 100).toFixed(2);
+}
+
 /** Device ids are 32 hex characters. Tables only need enough to tell them apart. */
 export function shortId(value: string, length = 12): string {
   return value.length > length ? `${value.slice(0, length)}…` : value;

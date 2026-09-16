@@ -399,6 +399,70 @@ model AppRelease {
     @@index([isPublished, publishedAt])
 }
 
+// ---------------------------------------------------------------------------
+// Pricing. Feeds the corporate website's price calculator (Epos365 repo,
+// `_actions/quote.ts`/`quote-section.tsx`) via GET /api/pricing below. One
+// platform-wide price list, not per-shop — every figure is in cents, never a
+// float, matching `QuoteRequest.estimateCents`'s convention.
+// ---------------------------------------------------------------------------
+
+/// The till software itself. A single row in practice — the client offers
+/// one product, billable three ways — but modelled as a table rather than a
+/// handful of loose columns so a second plan is a new row, not a schema
+/// change. `isActive` rather than delete: an old plan a customer is still
+/// paying under should stay readable in the admin panel.
+///
+/// Each price is nullable independently: a plan need not be offered under
+/// all three cycles (e.g. one-time-only, no subscription option). Null means
+/// "not offered this way," not "free" — the calculator/site must hide, not
+/// zero-price, an absent cycle.
+model PricingPlan {
+    id          String @id @default(cuid())
+    name        String @default("EPos 365")
+    description String?
+
+    oneTimeCents Int?
+    monthlyCents Int?
+    yearlyCents  Int?
+
+    isActive  Boolean @default(true)
+    sortOrder Int     @default(0)
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@index([isActive, sortOrder])
+}
+
+/// One line item the calculator can add on top of the plan — a till, a
+/// kitchen printer, the card terminal. Same nullable-per-cycle shape as
+/// `PricingPlan`: the card terminal, for instance, may only ever be offered
+/// as a monthly rental, never a one-time purchase.
+model HardwareItem {
+    id   String  @id @default(cuid())
+    name String
+    /// Short clarifier shown under the name, e.g. "15" touch screen".
+    note String?
+
+    oneTimeCents Int?
+    monthlyCents Int?
+    yearlyCents  Int?
+
+    /// How many of this item a shop may add in the calculator. `minQuantity`
+    /// above 0 makes it always-on and not removable (e.g. a till bundled
+    /// into every plan) — see the corporate site's `CalculatorOption.fixed`.
+    minQuantity Int @default(0)
+    maxQuantity Int @default(1)
+
+    isActive  Boolean @default(true)
+    sortOrder Int     @default(0)
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@index([isActive, sortOrder])
+}
+
 enum AuditEventType {
     license_created
     license_updated
@@ -427,6 +491,10 @@ enum AuditEventType {
     license_file_generated
     release_published
     release_unpublished
+    pricing_plan_updated
+    hardware_item_created
+    hardware_item_updated
+    hardware_item_deleted
 }
 
 /// Append-only feed. Nothing in the app updates or deletes these rows.
