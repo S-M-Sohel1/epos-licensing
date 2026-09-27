@@ -1,5 +1,12 @@
 # Customer self-registration — design
 
+> **Status: built, and since extended.** This document is the design that was
+> agreed before the work started, kept because the reasoning behind the identity
+> split and the server-to-server rule still governs the code. It is no longer an
+> accurate description of what exists. Read "Where the build diverged" at the
+> bottom first, then treat the rest as the argument rather than the spec; the
+> code in `src/server/customer/` and `src/server/shops.ts` is the spec.
+
 Scopes the self-serve signup flow the corporate website (`Epos365/epos_corporate_web`, hosted on a
 separate Hostinger VPS) needs, without duplicating this repo's `Shop`/`License` data anywhere else.
 Companion to `design.md` and the behavioural contract in `../pos_customized/Licensing_Design.md`,
@@ -159,3 +166,45 @@ No trial license, no payment, no plan/tier concept, no customer-facing device se
 `GET /me` (read-only). Every one of those depends on the pricing model in `HANDOVER.md` §6 that the
 client hasn't set yet. This design only removes the "two places" duplication risk and gives a shop
 owner a login to grow into once that's decided — it does not get ahead of it.
+
+## Where the build diverged
+
+What shipped follows the reasoning above and not always its details. The
+differences, so nobody reads this document as current:
+
+**One customer, many shops.** `Customer.shopId @unique` became `Customer.shops
+Shop[]` with a `shopLimit` counter, and `Shop` carries the optional `customerId`.
+The design called a second shop a future need and said widening later would be
+additive; it was, and it happened almost immediately, because the shops that buy
+this often run two.
+
+**Sessions are bearer tokens, not cookies.** The endpoint table above says
+"200 + session cookie". `CustomerSession` and its row-you-can-delete revocation
+survived exactly as designed, but the token is returned in the response body and
+the caller sends it back as `Authorization: Bearer`. That follows from the
+server-to-server rule this document already argued for: the corporate site's own
+backend holds the token and mints its own first-party cookie, so a cookie from
+this origin was never going to reach a browser anyway.
+
+**Registration returns a session.** `POST /register` responds 201 with a token
+and expiry, so a new customer is signed in without a second round trip. It
+returns 422 for both a bad shape and an already-registered email, not the 409 in
+the table; the caller distinguishes them by message.
+
+**More than `GET /me`.** Also shipped: `POST /profile` and `/change-password`,
+`POST /shops` (against `shopLimit`), `POST /shops/[id]/subdomain`, and
+`GET /check-slug` for live availability while typing. And `POST
+/api/leads/quote-request`, which takes an optional bearer token so an anonymous
+visitor can still ask for a quote. `Shop` grew a website dimension the design
+never mentioned — `subdomain`, `customDomain`, `styleConfig`, `templateId`,
+`isPublished` — which is the hosted shop-site feature rather than licensing, and
+has no design document of its own.
+
+**Email and password are now optional on `Customer`.** Both columns are
+nullable, because the admin panel creates customer rows for shops that have never
+signed up, and those have no login yet.
+
+**Both open items are still open.** There is no rate limiting anywhere in the
+repo, and `/register` and `/signin` are public. There is still no
+`prisma/migrations` directory. Neither blocked the build, and neither has been
+solved since; item 2, email verification, was decided by skipping it.

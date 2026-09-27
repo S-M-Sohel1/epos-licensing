@@ -30,6 +30,12 @@ datasource db {
 /// business the license belongs to. Those fields stay null until a customer
 /// actually activates a subdomain (gated by `Customer.shopLimit`) — nothing
 /// here is populated at registration time.
+///
+/// epos_corporate_web reads this table through a view,
+/// `storefront."Shop"` (see Epos365/SHARED_DATABASE_SCHEMA.md). Adding
+/// columns here is fine; dropping or retyping a column that view selects
+/// will fail until the view is dropped and recreated. A new `TemplateId`
+/// value also needs adding to that app's own `TemplateId` enum.
 model Shop {
     id   String  @id @default(cuid())
     name String

@@ -5,9 +5,13 @@ import { type Guide } from "./types";
  * level is a number (Staff 10, Manager 50, Administrator 100) with the Staff/
  * Manager/Administrator buttons just presets onto it, a user can never grant
  * a level above their own, PINs are globally unique since sign-in is PIN-only
- * with no username, and sandbox mode's Manager gate is hardcoded rather than
- * a SecurityKey row. The level each action needs is itself editable on the
- * Security sub-tab (steppers per action, not fixed). Administering a peer at
+ * with no username, and sandbox mode is a SecurityKey row seeded at Manager
+ * (migration 0077 — it was hardcoded when this guide was first written, which
+ * is why an earlier draft said so). The level each action needs is itself
+ * editable on the Security sub-tab (steppers per action, not fixed). Seeded
+ * levels, checked against the migrations rather than assumed: Management.Access
+ * 50, Settings.Access 90, License.Release 50, Sandbox.Mode 50, Database.Reset
+ * 90. Administering a peer at
  * the SAME level (edit, delete, reset PIN) is blocked unless the acting user
  * holds the shop's single top rank (ManagementViewModel.CanAdministerAsync).
  * Deactivating a user has no open-orders guard; that guard exists only on
@@ -61,9 +65,11 @@ export const usersAndPermissions: Guide = {
           head: ["Action", "Needs at least"],
           rows: [
             ["Voiding an order", "Manager"],
-            ["Opening Management or Settings", "Manager"],
+            ["Opening Management", "Manager"],
+            ["Opening Settings", "Administrator"],
             ["Turning on sandbox (training) mode", "Manager"],
-            ["Releasing this till's licence", "Administrator"],
+            ["Releasing this till's licence", "Manager"],
+            ["Resetting the database", "Administrator"],
           ],
         },
         {

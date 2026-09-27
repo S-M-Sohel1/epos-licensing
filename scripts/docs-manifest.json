@@ -1,17 +1,17 @@
 {
-  "sandbox-sales": "4be63e32f89b1616fa714dc1c1328f6f570a2ee11a248fe5e0490701c454ce05",
+  "sandbox-sales": "ced333a2af31a292c4a26d37aef5604de86f90aaa2d847d391042d79245f9a01",
   "low-stock-warnings": "16861073e72f07207e888fc8780de48caa496371c2b178cfae5395d40757a084",
   "expiry-dates": "c56cea59ec20a9b4d5bd5e16529c13e4d82daf1c043ea4801e1c2071ed57b665",
   "slow-moving-stock": "ec603342e3b6a7b3777dcd772395b0ca20563438b6e56ebdcbc10e4f1177da0b",
-  "end-of-day": "7fd91e5548070839d7fc4d9573cdae3053bf940943556bfd6798d875b3be2520",
+  "end-of-day": "f854fb8e7c84994e948b2d7fe9f2ce900a3bea0e01f8dcf9fbf7cb6d562ab6e1",
   "cash-in-out": "ea10ec118be2890905b2bc756a6555ed07184bad463fb70d1cce38e4179ec1d9",
   "credit-payments": "09971f6d2a872434d48b223c4e603f0b939d7deecd51252ce1f320378e4ea4f0",
-  "users-and-permissions": "2b7d0344bb343c1b4827d784080a758203b1b90209e11ae904d3c970ab38fbb5",
+  "users-and-permissions": "e7942f0c2946cbd6c24a390df93244ae6dcc162b038dcd521fd394f21c17dbf6",
   "print-stations": "1a4be3de43294a6ed5c6d5ceded124266408391ce2bf77385604bc510acd97d1",
   "printer-setup": "7c2b9a5533a5f312831cd146eb87507b738a88b99d6e817e917aeea12c47adc7",
-  "email-reports": "44e00f6a8c2c9e8f23d159b1c54b82875b41c646af4a113210622e6fb00530bb",
-  "product-import": "3a66ff28d2975fe533b2f8dc6aa2ff6238d25f3faaaefb459e5f31dbef759028",
+  "email-reports": "593e14c4ea86fa80e9a4f629007eb09c3f0e769a78e1f0bc394733a8d9380a03",
+  "product-import": "54fec9c998ebdefc7c17f99f529ab253200f39ed7f4fb045a49ccb2103723865",
   "promotions": "6737cb7d2a925b1220c8245c4ffbaab75a863b018324fbfe4a70d1eace4bf3c8",
   "database-backup": "1a59f83e21cc534a7648c1ef7eaa84394c870bd1eb0223f6480f7fd8c149aac9",
-  "full-documentation": "8a2803019027f14541ada0e2fc1df46e0ff3b36046abdb40f5acb1dbbe92b5b2"
+  "full-documentation": "4af1f0c152880391016d12e0013a8600a479dbde4d1b05cf31434b7969f13ec4"
 }

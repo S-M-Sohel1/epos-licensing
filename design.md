@@ -1,11 +1,22 @@
-# Frontend design guidelines — epos-licensing admin panel
+# Frontend design guidelines — epos-licensing
 
-This admin panel's frontend (license list, pending-approval queue, device management, shop/
-customer records, audit log — see `Licensing_Design.md`'s "Admin panel scope" section in
-`pos_customized` for the feature scope) should be designed and built using Vercel's own report/
-brand design system and judgment, captured verbatim below from the `vercel-brand-guidelines` skill.
-Treat this as the design authority when building any page in `src/app` — do not invent a parallel
-visual system, and do not build generic dashboard/SaaS-template UI instead of following this.
+Every page in `src/app` should be designed and built using Vercel's own report/brand design system
+and judgment, captured verbatim below from the `vercel-brand-guidelines` skill. Treat this as the
+design authority — do not invent a parallel visual system, and do not build generic
+dashboard/SaaS-template UI instead of following this.
+
+That covers three kinds of page, and the same system carries all of them:
+
+- **The admin panel** — approvals queue, licenses, devices, customers and their shops, releases,
+  audit log, administrators. `Licensing_Design.md`'s "Admin panel scope" section in
+  `pos_customized` has the feature scope.
+- **The public guides** at `/docs`, read by shop staff rather than by the vendor, and printed to
+  PDF by `pnpm docs:pdf`. Same visual system, plainer language: they are written for someone
+  standing at a till, not for someone administering licenses.
+- **The public tools** at `/tools`, currently the catalogue CSV converter.
+
+The one rule that is specific to the public pages rather than to the visual system: nothing on them
+may name another till product, since they are reachable without a sign-in.
 
 ---
 

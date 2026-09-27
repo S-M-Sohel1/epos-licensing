@@ -410,8 +410,7 @@ export interface ReleaseResult {
  * for, and they would fail a fingerprint check.
  *
  * Idempotent: releasing an already-released device succeeds without touching
- * anything, so a client retry after a dropped response is not an error and does
- * not spend the cooldown.
+ * anything, so a client retry after a dropped response is not an error.
  */
 export async function releaseOwnDevice(
   request: ClientRequest,

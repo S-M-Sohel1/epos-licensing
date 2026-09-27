@@ -7,10 +7,17 @@ import { type Guide } from "./types";
  * not block, "Print selected report" in History is a real reprint (despite an
  * older note in this project's CLAUDE.md), the open-orders check runs for all
  * three tiles (not only Close register), the shared-drawer notice is an
- * informational banner rather than a gate on Continue, closing itself shows
- * only a message box with no Report button (the report is printed afterward
- * from History), and X REPORT is a separate always-visible tile that prints a
- * live snapshot at any time without closing anything.
+ * informational banner rather than a gate on Continue, and X REPORT is a
+ * separate always-visible tile that prints a live snapshot at any time without
+ * closing anything.
+ *
+ * Closing PRINTS THE Z-REPORT ITSELF (EndOfDayViewModel.ContinueAsync), through
+ * the customer-receipt printer — there is no separate report-printer setting.
+ * The print is best-effort and never fatal: the register is already closed and
+ * the row committed by then, so an unassigned or broken printer appends a line
+ * to the confirmation telling the operator to reprint from History rather than
+ * making the close look like it failed. This guide said the opposite until
+ * v3.6.0's automatic print landed.
  */
 export const endOfDay: Guide = {
   slug: "end-of-day",
@@ -85,15 +92,19 @@ export const endOfDay: Guide = {
       blocks: [
         {
           kind: "p",
-          text: "You get a confirmation with the Z-report number, then the screen closes. There is no print button on that confirmation.",
+          text: "The Z-report prints itself, on the same printer your receipts come out of. You also get a confirmation on screen with the report number. There is no print button on it because the paper is already coming.",
         },
         {
           kind: "p",
-          text: "To print it, open the History tab on the same screen, find it in the list, and choose Print selected report. Do this for any past report, any time, not just the one you just closed.",
+          text: "If the printer is off, out of paper or not set up, the confirmation says so and tells you to print it later. The register is still closed either way. Nothing is lost, and the count is not affected.",
         },
         {
           kind: "p",
-          text: "Turn on the Z report (end of day) toggle in Settings -> Email -> Reporting to have it emailed too. Every close then emails you a copy, on top of anything you print by hand.",
+          text: "To print one again, open the History tab on the same screen, find it in the list, and choose Print selected report. That works for any past report, any time, not just the one you have closed.",
+        },
+        {
+          kind: "p",
+          text: "Turn on the Z report (end of day) toggle in Settings -> Email -> Reporting to have it emailed too. Every close then emails you a copy as well as printing the slip, which is worth having if the till's printer is the only other record.",
         },
       ],
     },

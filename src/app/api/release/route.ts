@@ -15,7 +15,9 @@ import { releaseOwnDevice } from "~/server/licensing/service";
  * needs no admin session — a request can only ever name its own device id, so
  * there is no reachable way to release someone else's slot. See
  * `releaseOwnDevice` for why the hardware fingerprint is recorded but not
- * enforced, and for the 24-hour cooldown.
+ * enforced, and for why the self-release cooldown that used to live here was
+ * removed. `RetryAfterUtc` is still in the response shape, always null, because
+ * tills in the field still read it.
  *
  * Outcomes:
  * - 200 { Ok: true }        slot freed, or already free (idempotent)

@@ -37,10 +37,11 @@ export const sandboxSales: Guide = {
         {
           kind: "ul",
           items: [
-            "Only a Manager or Administrator can turn it on, and you will be asked for your PIN even though you are already signed in.",
-            "Anyone below that level does not see the menu entry at all, and the shortcut does nothing for them.",
+            "Turning it on needs Manager level or above out of the box, and you will be asked for your PIN even though you are already signed in.",
+            "That level is yours to set. Management -> Users & security -> Security has a line called Enable sandbox mode: lower it if you want a particular member of staff to run practice sessions themselves.",
+            "Anyone below the level does not see the menu entry at all, and the shortcut does nothing for them. There is no way for a manager to approve it for them on the spot, unlike most other restricted actions.",
             "Turning it off is not restricted at all: no PIN, and any user can do it.",
-            "The sale on screen has to be empty, going in or coming out, so finish or clear it first.",
+            "A sale already on screen comes with you, whichever way you are going. The till asks first and says plainly what the sale becomes, so an order rung on the wrong till does not have to be typed again.",
           ],
         },
         {

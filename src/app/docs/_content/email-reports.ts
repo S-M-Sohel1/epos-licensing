@@ -44,6 +44,10 @@ export const emailReports: Guide = {
         },
         {
           kind: "p",
+          text: "Those two boxes come filled in with wording that already uses placeholders, so you can see the syntax rather than guess at it. Edit around them: %shop%, %address%, %phone%, %taxnumber%, %user%, %date%, %time%, %datetime%, %reportnumber% and %attachments% are each replaced when the email goes out. Anything else you type between percent signs is left exactly as typed, so a stray one is harmless. Clear a box entirely and the till falls back to its own wording.",
+        },
+        {
+          kind: "p",
           text: "The Z report (end of day) and X report have their own toggles alongside it. Turn on the Z report and every register close emails it to you, on top of anything you print by hand.",
         },
         {
