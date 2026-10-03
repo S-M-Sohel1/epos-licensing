@@ -16,12 +16,14 @@
 // builds its client.
 import "./quiet";
 
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
+
+import { DeleteObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
 import { db } from "~/server/db";
 import { generateLicenseKey } from "~/server/licensing/license-key";
 
-import { check, checkEqual, cleanUp, group, summarize } from "./harness";
+import { check, checkEqual, cleanUp, group, skip, summarize } from "./harness";
 
 const BASE = process.env.VERIFY_BASE_URL ?? "http://localhost:3000";
 const RUN = `verify-pos-${Date.now()}`;
@@ -94,6 +96,35 @@ async function push(
   }
   return { status: response.status, body: parsed };
 }
+
+/** Any other till-facing call: JSON by default, raw bytes when given a Buffer. */
+async function call(
+  path: string,
+  credentials: { key: string; deviceId: string },
+  body: unknown,
+): Promise<{ status: number; body: Record<string, unknown> & { code?: string; missing?: string[] } }> {
+  const raw = Buffer.isBuffer(body);
+  const response = await fetch(`${BASE}${path}`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${credentials.key}`,
+      "x-device-id": credentials.deviceId,
+      "content-type": raw ? "application/octet-stream" : "application/json",
+    },
+    body: raw ? new Uint8Array(body) : JSON.stringify(body),
+  });
+  const text = await response.text();
+  try {
+    return { status: response.status, body: JSON.parse(text) as Record<string, unknown> };
+  } catch {
+    return { status: response.status, body: { raw: text } };
+  }
+}
+
+const sha256 = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
+/** Starts with the PNG signature, which is all the server's type check looks at. */
+const fakePng = (filler: number, length = 2048) =>
+  Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(length, filler)]);
 
 /** A change set in the exact PascalCase shape Pos.Core.Sync.SyncChangeSet serializes. */
 function changeSet(
@@ -225,6 +256,25 @@ async function main() {
   checkEqual("the first till to publish becomes the shop's publisher",
     (await db.device.findUnique({ where: { id: tillA1.rowId } }))?.canPublishCatalog, true);
 
+  group("The website is told");
+  if (process.env.WEB_PLATFORM_URL && process.env.INTERNAL_API_SECRET) {
+    // The push answered before the website was called, so give the call a moment to land.
+    let onMenu: { name: string; priceCents: number; isAvailable: boolean }[] = [];
+    for (let attempt = 0; attempt < 30 && onMenu.length < 16; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      onMenu = await db.$queryRaw`
+        SELECT "name", "priceCents", "isAvailable" FROM storefront."MenuItem" WHERE "shopId" = ${a.shop.id}`;
+    }
+    checkEqual("the shop's menu on the website has all sixteen items, with no sweep", onMenu.length, 16);
+    checkEqual("at the till's price", onMenu.find((i) => i.name === "Kebab")?.priceCents, 995);
+    checkEqual("a product not offered online is on the menu as unavailable", onMenu.find((i) => i.name === "Loose olives")?.isAvailable, false);
+    const otherShops = await db.$queryRaw<{ count: bigint }[]>`
+      SELECT count(*) AS count FROM storefront."MenuItem" WHERE "shopId" = ${b.shop.id}`;
+    checkEqual("and no other shop's menu was touched", Number(otherShops[0]?.count), 0);
+  } else {
+    skip("the website's menu updating after a push", "start this app with WEB_PLATFORM_URL and INTERNAL_API_SECRET, and run this script with them too");
+  }
+
   group("Sending the same thing again");
   const again = await push(credsA1, initial);
   checkEqual("accepted", again.status, 200);
@@ -302,6 +352,80 @@ async function main() {
   const confirmed = await push(credsA1, changeSet(lineage, { ...mass, confirm: true }));
   checkEqual("once confirmed, it is applied", confirmed.body.applied?.deletedItems, 5);
 
+  group("Pictures: the manifest");
+  const pictureOne = fakePng(1);
+  const pictureTwo = fakePng(2);
+  const hashOne = sha256(pictureOne);
+  const hashTwo = sha256(pictureTwo);
+  const versionBeforePictures = await versionOf(a.shop.id);
+  const manifestBody = {
+    Items: [
+      { PosId: "item-06", Hash: hashOne },
+      { PosId: "item-07", Hash: hashOne.toUpperCase() }, // the same picture on two products, in the other case
+      { PosId: "item-08", Hash: hashTwo },
+      { PosId: "item-09", Hash: "not-a-hash" },
+    ],
+    Cleared: [],
+  };
+  const manifest = await call("/api/pos/v1/catalog/images/manifest", credsA1, manifestBody);
+  checkEqual("accepted", manifest.status, 200);
+  checkEqual("three products now point at a picture", manifest.body.updated, 3);
+  checkEqual("the entry that is not a hash is rejected", manifest.body.rejected, 1);
+  checkEqual("both pictures are reported missing, each once", JSON.stringify([...(manifest.body.missing ?? [])].sort()), JSON.stringify([hashOne, hashTwo].sort()));
+  const staged = await db.$queryRaw<{ posId: string; imageHash: string | null }[]>`
+    SELECT "posId", "imageHash" FROM pos_sync.catalog_item WHERE "shopId" = ${a.shop.id} AND "posId" IN ('item-06', 'item-07', 'item-08', 'item-09')`;
+  checkEqual("the product records which picture it has", staged.find((i) => i.posId === "item-06")?.imageHash, hashOne);
+  checkEqual("the upper-case hash was stored in lower case", staged.find((i) => i.posId === "item-07")?.imageHash, hashOne);
+  checkEqual("the rejected entry changed nothing", staged.find((i) => i.posId === "item-09")?.imageHash, null);
+  checkEqual("a picture change moves the catalogue version", await versionOf(a.shop.id), versionBeforePictures + 1);
+
+  const manifestAgain = await call("/api/pos/v1/catalog/images/manifest", credsA1, manifestBody);
+  checkEqual("the same manifest again changes nothing", manifestAgain.body.updated, 0);
+  checkEqual("and does not move the version", await versionOf(a.shop.id), versionBeforePictures + 1);
+  checkEqual("but still reports what is missing", manifestAgain.body.missing?.length, 2);
+
+  const clearing = await call("/api/pos/v1/catalog/images/manifest", credsA1, { Items: [], Cleared: ["item-08"] });
+  checkEqual("a cleared picture is removed from the product", clearing.body.cleared, 1);
+  checkEqual("a till that is not the publisher cannot send a manifest",
+    (await call("/api/pos/v1/catalog/images/manifest", { key: a.license.key, deviceId: tillA2.deviceId }, manifestBody)).body.code, "not_publisher");
+  const strangerB = await call("/api/pos/v1/catalog/images/manifest", { key: b.license.key, deviceId: tillB.deviceId }, {
+    Items: [{ PosId: "item-06", Hash: hashTwo }], Cleared: ["item-07"],
+  });
+  checkEqual("shop B's manifest is accepted for shop B", strangerB.status, 200);
+  const afterB = await db.$queryRaw<{ posId: string; imageHash: string | null }[]>`
+    SELECT "posId", "imageHash" FROM pos_sync.catalog_item WHERE "shopId" = ${a.shop.id} AND "posId" IN ('item-06', 'item-07')`;
+  checkEqual("and leaves shop A's pictures as they were", afterB.every((i) => i.imageHash === hashOne), true);
+
+  group("Pictures: the upload");
+  const upload = (creds: { key: string; deviceId: string }, hash: string, bytes: Buffer) =>
+    call(`/api/pos/v1/catalog/images/${hash}`, creds, bytes);
+  checkEqual("bytes that do not match the hash are refused", (await upload(credsA1, hashTwo, pictureOne)).body.code, "hash_mismatch");
+  const notAnImage = Buffer.from("this is a text file, not a picture");
+  checkEqual("something that is not a PNG or JPEG is refused", (await upload(credsA1, sha256(notAnImage), notAnImage)).body.code, "not_an_image");
+  const huge = fakePng(3, 600 * 1024);
+  checkEqual("an oversized picture is refused", (await upload(credsA1, sha256(huge), huge)).status, 413);
+  checkEqual("an address that is not a hash is refused", (await upload(credsA1, "abc", pictureOne)).body.code, "invalid_hash");
+  checkEqual("a till that is not the publisher cannot upload", (await upload({ key: a.license.key, deviceId: tillA2.deviceId }, hashOne, pictureOne)).body.code, "not_publisher");
+
+  const good = await upload(credsA1, hashOne, pictureOne);
+  if (good.status === 503) {
+    checkEqual("with no bucket configured, a valid picture gets a clear 503", good.body.code, "storage_not_configured");
+    const recorded = await db.$queryRaw<{ count: bigint }[]>`
+      SELECT count(*) AS count FROM pos_sync.catalog_image WHERE "shopId" = ${a.shop.id}`;
+    checkEqual("and nothing is recorded as stored", Number(recorded[0]?.count), 0);
+    skip("storing a picture and serving it back", "R2 is not configured in this environment (R2_* are blank)");
+  } else {
+    checkEqual("a valid picture is stored", good.status, 200);
+    const recorded = await db.$queryRaw<{ objectKey: string }[]>`
+      SELECT "objectKey" FROM pos_sync.catalog_image WHERE "shopId" = ${a.shop.id} AND "hash" = ${hashOne}`;
+    checkEqual("under the shop's own prefix", recorded[0]?.objectKey, `${a.shop.id}/${hashOne}.png`);
+    checkEqual("sending it again says it is already held", (await upload(credsA1, hashOne, pictureOne)).body.alreadyHeld, true);
+    const after = await call("/api/pos/v1/catalog/images/manifest", credsA1, manifestBody);
+    check("the manifest no longer asks for it", !(after.body.missing ?? []).includes(hashOne));
+    const served = await fetch(`${process.env.R2_PUBLIC_BASE_URL?.replace(/\/$/, "")}/${recorded[0]?.objectKey}`);
+    checkEqual("it can be fetched from its public address", served.status, 200);
+  }
+
   group("What the website's role may do with the staged catalogue");
   const grants = await db.$queryRaw<{ read: boolean; write: boolean; held: boolean; log: boolean }[]>`
     SELECT has_table_privilege('storefront_app', 'pos_sync.catalog_item', 'SELECT') AS read,
@@ -329,9 +453,38 @@ async function main() {
   checkEqual("the held push is logged", kinds.get("push_held"), 1);
 }
 
+/** Pictures this run put in the bucket. Removed with the rest of its fixtures. */
+async function removeStoredPictures() {
+  const { R2_ACCOUNT_ID, R2_BUCKET, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY } = process.env;
+  if (!R2_ACCOUNT_ID || !R2_BUCKET || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY || shopIds.length === 0) return;
+
+  const stored = await db.$queryRaw<{ objectKey: string }[]>`
+    SELECT "objectKey" FROM pos_sync.catalog_image WHERE "shopId" = ANY(${shopIds}::text[])`;
+  if (stored.length === 0) return;
+
+  const s3 = new S3Client({
+    region: "auto",
+    endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+    credentials: { accessKeyId: R2_ACCESS_KEY_ID, secretAccessKey: R2_SECRET_ACCESS_KEY },
+  });
+  for (const { objectKey } of stored) {
+    await s3.send(new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: objectKey }));
+  }
+}
+
 async function teardown() {
-  for (const table of ["catalog_item", "catalog_category", "catalog_state", "catalog_held_push", "sync_log"]) {
+  await removeStoredPictures();
+  for (const table of ["catalog_item", "catalog_category", "catalog_state", "catalog_held_push", "catalog_image", "sync_log"]) {
     await db.$executeRawUnsafe(`DELETE FROM pos_sync."${table}" WHERE "shopId" = ANY($1::text[])`, shopIds);
+  }
+  // When the website is being notified, it has built menus for these shops. They are this
+  // run's fixtures too, so they are removed with it.
+  for (const table of ["MenuItem", "Category", "PosCatalogCursor"]) {
+    await db.$executeRawUnsafe(
+      `DO $$ BEGIN IF to_regclass('storefront."${table}"') IS NOT NULL THEN
+         DELETE FROM storefront."${table}" WHERE "shopId" = ANY(string_to_array('${shopIds.join(",")}', ','));
+       END IF; END $$;`,
+    );
   }
   // Licences and their devices go with the shop (ON DELETE CASCADE).
   await db.shop.deleteMany({ where: { id: { in: shopIds } } });

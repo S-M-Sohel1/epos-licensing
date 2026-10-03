@@ -16,7 +16,8 @@
 -- === What the website may touch ===
 --
 -- `storefront_app` (the role epos_corporate_web runs as) may SELECT the staged
--- catalogue. That is all it gets on this schema at this step.
+-- catalogue and the list of stored pictures. That is all it gets on this
+-- schema at this step.
 --
 -- Idempotent. Applied by `pnpm db:sql`.
 
@@ -76,6 +77,22 @@ CREATE TABLE IF NOT EXISTS pos_sync.catalog_item (
 CREATE INDEX IF NOT EXISTS catalog_category_changed ON pos_sync.catalog_category ("shopId", "changedVersion");
 CREATE INDEX IF NOT EXISTS catalog_item_changed ON pos_sync.catalog_item ("shopId", "changedVersion");
 
+-- A product picture this shop has uploaded, by the SHA-256 of its bytes. The
+-- till asks "which of these hashes do you lack" before sending any bytes, so a
+-- picture is uploaded once however many products or tills carry it. Keyed per
+-- shop: a shared key would let one shop learn, from what the server says it
+-- already has, that another shop holds the same picture.
+CREATE TABLE IF NOT EXISTS pos_sync.catalog_image (
+    "shopId"      text NOT NULL,
+    "hash"        text NOT NULL,
+    -- Where the bytes are in the bucket: {shopId}/{hash}.{ext}
+    "objectKey"   text NOT NULL,
+    "contentType" text NOT NULL,
+    "bytes"       integer NOT NULL,
+    "createdAt"   timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY ("shopId", "hash")
+);
+
 -- A push that was not applied because it would have removed a large share of
 -- the live menu. It waits here for the shop's owner to confirm or discard.
 CREATE TABLE IF NOT EXISTS pos_sync.catalog_held_push (
@@ -126,7 +143,7 @@ DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'storefront_app') THEN
         GRANT USAGE ON SCHEMA pos_sync TO storefront_app;
-        GRANT SELECT ON pos_sync.catalog_state, pos_sync.catalog_category, pos_sync.catalog_item TO storefront_app;
+        GRANT SELECT ON pos_sync.catalog_state, pos_sync.catalog_category, pos_sync.catalog_item, pos_sync.catalog_image TO storefront_app;
 
         DROP POLICY IF EXISTS storefront_app_read ON pos_sync.catalog_state;
         CREATE POLICY storefront_app_read ON pos_sync.catalog_state FOR SELECT TO storefront_app USING (true);
@@ -134,6 +151,8 @@ BEGIN
         CREATE POLICY storefront_app_read ON pos_sync.catalog_category FOR SELECT TO storefront_app USING (true);
         DROP POLICY IF EXISTS storefront_app_read ON pos_sync.catalog_item;
         CREATE POLICY storefront_app_read ON pos_sync.catalog_item FOR SELECT TO storefront_app USING (true);
+        DROP POLICY IF EXISTS storefront_app_read ON pos_sync.catalog_image;
+        CREATE POLICY storefront_app_read ON pos_sync.catalog_image FOR SELECT TO storefront_app USING (true);
     END IF;
 END
 $$;

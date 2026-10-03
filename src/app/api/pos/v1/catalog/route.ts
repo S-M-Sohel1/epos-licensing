@@ -1,5 +1,6 @@
 import { applyPush, parsePush } from "~/server/pos-sync/catalog";
 import { authenticateTill, refusal } from "~/server/pos-sync/guard";
+import { notifyWebPlatform } from "~/server/pos-sync/notify";
 
 /**
  * POST /api/pos/v1/catalog — a till publishes its catalogue changes.
@@ -53,6 +54,7 @@ export async function POST(request: Request): Promise<Response> {
     case "held":
       return json({ held: true, heldId: outcome.heldId, reason: outcome.reason, rejected: outcome.rejected }, 202);
     case "applied":
+      if (Object.values(outcome.applied).some((count) => count > 0)) notifyWebPlatform(caller.shopId);
       return json(
         { version: outcome.version, applied: outcome.applied, stale: outcome.stale, rejected: outcome.rejected },
         200,

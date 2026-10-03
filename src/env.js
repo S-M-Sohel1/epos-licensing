@@ -53,6 +53,24 @@ export const env = createEnv({
     R2_SECRET_ACCESS_KEY: z.string().min(1).optional(),
     /** Where the bucket is served from publicly, no trailing slash — an r2.dev address or a custom domain. */
     R2_PUBLIC_BASE_URL: z.string().url().optional(),
+
+    /**
+     * The address of the web platform: the ONE deployment of epos_corporate_web
+     * that serves the corporate site and every shop's storefront. A single
+     * value for the whole platform, e.g. "https://epos-365.com", no trailing
+     * slash.
+     *
+     * NOT a shop's storefront address. Shops' storefronts are subdomains of
+     * this deployment, and this service never calls one of those: it calls
+     * `<WEB_PLATFORM_URL>/api/internal/pos-catalog/apply` and names the shop
+     * in the request body.
+     *
+     * Used, with INTERNAL_API_SECRET, to tell that app a till has published,
+     * so the shop's menu updates at once. Both optional: without them the
+     * menu still catches up within a minute from that app's own sweep.
+     */
+    WEB_PLATFORM_URL: z.string().url().optional(),
+    INTERNAL_API_SECRET: z.string().min(16).optional(),
   },
 
   /**
@@ -79,6 +97,8 @@ export const env = createEnv({
     R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID,
     R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY,
     R2_PUBLIC_BASE_URL: process.env.R2_PUBLIC_BASE_URL,
+    WEB_PLATFORM_URL: process.env.WEB_PLATFORM_URL,
+    INTERNAL_API_SECRET: process.env.INTERNAL_API_SECRET,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially
