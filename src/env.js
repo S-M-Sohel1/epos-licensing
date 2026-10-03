@@ -39,6 +39,20 @@ export const env = createEnv({
     /** Seed-only. Used by `pnpm db:seed` to create the single admin login. */
     ADMIN_EMAIL: z.string().email().optional(),
     ADMIN_PASSWORD: z.string().min(8).optional(),
+
+    /**
+     * Cloudflare R2, where product pictures a till publishes are stored
+     * (keyed `{shopId}/{hash}.{ext}`). R2 speaks the S3 API. All five are
+     * optional: until they are set the picture endpoints answer 503 and the
+     * rest of catalogue sync works without pictures.
+     */
+    R2_ACCOUNT_ID: z.string().min(1).optional(),
+    R2_BUCKET: z.string().min(1).optional(),
+    R2_ACCESS_KEY_ID: z.string().min(1).optional(),
+    /** A secret: server environment only. */
+    R2_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+    /** Where the bucket is served from publicly, no trailing slash — an r2.dev address or a custom domain. */
+    R2_PUBLIC_BASE_URL: z.string().url().optional(),
   },
 
   /**
@@ -60,6 +74,11 @@ export const env = createEnv({
     LICENSE_SIGNING_PRIVATE_KEY: process.env.LICENSE_SIGNING_PRIVATE_KEY,
     ADMIN_EMAIL: process.env.ADMIN_EMAIL,
     ADMIN_PASSWORD: process.env.ADMIN_PASSWORD,
+    R2_ACCOUNT_ID: process.env.R2_ACCOUNT_ID,
+    R2_BUCKET: process.env.R2_BUCKET,
+    R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID,
+    R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY,
+    R2_PUBLIC_BASE_URL: process.env.R2_PUBLIC_BASE_URL,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially

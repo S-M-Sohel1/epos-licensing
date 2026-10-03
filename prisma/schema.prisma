@@ -332,6 +332,14 @@ model Device {
     /// a shop cycling slots, not to stop support fixing something. Null means
     /// "never self-released", which is the state of every device predating this.
     lastSelfReleaseAt DateTime?
+
+    /// Whether this till may publish the shop's catalogue to its website
+    /// (POST /api/pos/v1/catalog). The till has its own permission check for
+    /// staff, but that is a policy inside the till: this is the control the
+    /// server can enforce, since it cannot see who is standing at the till.
+    /// The first till to publish for a shop is granted it; after that the
+    /// owner decides. Added by prisma/sql/pos-sync-schema.sql.
+    canPublishCatalog Boolean @default(false)
     createdAt   DateTime  @default(now())
     updatedAt   DateTime  @updatedAt
 
