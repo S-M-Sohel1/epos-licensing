@@ -12,7 +12,7 @@ import { notifyWebPlatform } from "~/server/pos-sync/notify";
  *   200  applied (possibly with nothing changed, if the server already had it all)
  *   202  held: the push would take a large share of the menu offline and waits for the owner
  *   400  not a change set
- *   401  no or unknown licence key
+ *   401  no or unknown licence key, or the request is not signed by this till's key
  *   403  licence blocked or expired, till not approved, or not the shop's publishing till
  *   409  the till's database is not from this shop's lineage
  *
@@ -37,9 +37,10 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
+  // The guard has already read the body: the till's signature covers it.
   let body: unknown;
   try {
-    body = await request.json();
+    body = JSON.parse(guard.body.toString("utf8"));
   } catch {
     return json({ error: "The body is not JSON.", code: "invalid_body" }, 400);
   }

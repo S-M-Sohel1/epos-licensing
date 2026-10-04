@@ -23,7 +23,7 @@ export async function POST(request: Request): Promise<Response> {
 
   let body: unknown;
   try {
-    body = await request.json();
+    body = JSON.parse(guard.body.toString("utf8"));
   } catch {
     return json({ error: "The body is not JSON.", code: "invalid_body" }, 400);
   }

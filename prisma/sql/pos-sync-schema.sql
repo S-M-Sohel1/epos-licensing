@@ -137,6 +137,31 @@ $$;
 -- database port that is not always reachable (see Epos365/BUILD_STATE.md).
 ALTER TABLE public."Device" ADD COLUMN IF NOT EXISTS "canPublishCatalog" boolean NOT NULL DEFAULT false;
 
+-- The till's signing key (public half). Every /api/pos/v1 request is signed
+-- with the private half, which stays in the till's Windows key store. See
+-- src/server/pos-sync/guard.ts.
+ALTER TABLE public."Device" ADD COLUMN IF NOT EXISTS "posPublicKey" text;
+ALTER TABLE public."Device" ADD COLUMN IF NOT EXISTS "posPublicKeyAt" timestamptz;
+
+-- A device that stops being approved loses its key. This is how a key is
+-- reset: the owner deactivates the till and activates it again, and the till
+-- registers a fresh key. It is a trigger, not code in the licensing service,
+-- so no path that changes a device's status can forget it.
+CREATE OR REPLACE FUNCTION pos_sync.clear_device_key() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    IF NEW."status" IS DISTINCT FROM OLD."status" AND NEW."status"::text <> 'approved' THEN
+        NEW."posPublicKey" := NULL;
+        NEW."posPublicKeyAt" := NULL;
+    END IF;
+    RETURN NEW;
+END
+$$;
+
+DROP TRIGGER IF EXISTS device_clear_pos_key ON public."Device";
+CREATE TRIGGER device_clear_pos_key BEFORE UPDATE ON public."Device"
+    FOR EACH ROW EXECUTE FUNCTION pos_sync.clear_device_key();
+
 -- The website's read access. The role is created by epos_corporate_web's own
 -- SQL, so on a database where that has not run yet there is nothing to grant.
 DO $$

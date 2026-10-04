@@ -16,7 +16,7 @@
 // builds its client.
 import "./quiet";
 
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { createHash, generateKeyPairSync, randomBytes, randomUUID, sign, type KeyObject } from "node:crypto";
 
 import { DeleteObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
@@ -45,12 +45,66 @@ async function makeShop(label: string, options: { expired?: boolean } = {}) {
   return { shop, license };
 }
 
-async function makeTill(licenseId: string, status: "approved" | "pending" = "approved") {
+/** Each till's signing key, by device id. The private half never reaches the server, as on a real till. */
+const tillKeys = new Map<string, KeyObject>();
+
+function newSigningKey() {
+  const { publicKey, privateKey } = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+  return { privateKey, publicKeyBase64: publicKey.export({ format: "der", type: "spki" }).toString("base64") };
+}
+
+/**
+ * A till, with its signing key already registered unless `registerKey` is false.
+ * The key is written straight to the row here; the registration route has its own checks below.
+ */
+async function makeTill(
+  licenseId: string,
+  status: "approved" | "pending" = "approved",
+  options: { registerKey?: boolean } = {},
+) {
   const deviceId = randomUUID();
+  const key = newSigningKey();
+  const register = options.registerKey !== false;
   const device = await db.device.create({
-    data: { licenseId, deviceId, hardwareFingerprint: randomBytes(32).toString("hex").toUpperCase(), status },
+    data: {
+      licenseId,
+      deviceId,
+      hardwareFingerprint: randomBytes(32).toString("hex").toUpperCase(),
+      status,
+      ...(register ? { posPublicKey: key.publicKeyBase64, posPublicKeyAt: new Date() } : {}),
+    },
   });
-  return { deviceId, rowId: device.id };
+  tillKeys.set(deviceId, key.privateKey);
+  return { deviceId, rowId: device.id, publicKeyBase64: key.publicKeyBase64 };
+}
+
+/** The two headers a till adds to every request: when it was made, and its signature over it. */
+function signatureHeaders(
+  privateKey: KeyObject,
+  path: string,
+  body: Buffer,
+  options: { at?: number; signedPath?: string; signedBody?: Buffer } = {},
+): Record<string, string> {
+  const timestamp = String(options.at ?? Date.now());
+  const bodyHash = createHash("sha256").update(options.signedBody ?? body).digest("hex");
+  const text = `EPOS1\nPOST\n${options.signedPath ?? path}\n${timestamp}\n${bodyHash}`;
+  const signature = sign("sha256", Buffer.from(text), { key: privateKey, dsaEncoding: "ieee-p1363" });
+  return { "x-timestamp": timestamp, "x-signature": signature.toString("base64") };
+}
+
+/** A request with exactly the headers given, for the cases where the signature is the thing under test. */
+async function rawPost(
+  path: string,
+  headers: Record<string, string>,
+  body: Buffer,
+): Promise<{ status: number; body: Record<string, unknown> & { code?: string; serverTime?: number; registered?: boolean } }> {
+  const response = await fetch(`${BASE}${path}`, { method: "POST", headers, body: new Uint8Array(body) });
+  const text = await response.text();
+  try {
+    return { status: response.status, body: JSON.parse(text) as Record<string, unknown> };
+  } catch {
+    return { status: response.status, body: { raw: text } };
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -82,10 +136,13 @@ async function push(
   const headers: Record<string, string> = { "content-type": "application/json" };
   if (credentials.key) headers.authorization = `Bearer ${credentials.key}`;
   if (credentials.deviceId) headers["x-device-id"] = credentials.deviceId;
+  const bytes = Buffer.from(typeof body === "string" ? body : JSON.stringify(body));
+  const signingKey = credentials.deviceId ? tillKeys.get(credentials.deviceId) : undefined;
+  if (signingKey) Object.assign(headers, signatureHeaders(signingKey, "/api/pos/v1/catalog", bytes));
   const response = await fetch(`${BASE}/api/pos/v1/catalog`, {
     method: "POST",
     headers,
-    body: typeof body === "string" ? body : JSON.stringify(body),
+    body: new Uint8Array(bytes),
   });
   const raw = await response.text();
   let parsed: Reply["body"] = {};
@@ -104,14 +161,17 @@ async function call(
   body: unknown,
 ): Promise<{ status: number; body: Record<string, unknown> & { code?: string; missing?: string[] } }> {
   const raw = Buffer.isBuffer(body);
+  const bytes = raw ? body : Buffer.from(JSON.stringify(body));
+  const signingKey = tillKeys.get(credentials.deviceId);
   const response = await fetch(`${BASE}${path}`, {
     method: "POST",
     headers: {
       authorization: `Bearer ${credentials.key}`,
       "x-device-id": credentials.deviceId,
       "content-type": raw ? "application/octet-stream" : "application/json",
+      ...(signingKey ? signatureHeaders(signingKey, path, bytes) : {}),
     },
-    body: raw ? new Uint8Array(body) : JSON.stringify(body),
+    body: new Uint8Array(bytes),
   });
   const text = await response.text();
   try {
@@ -231,6 +291,76 @@ async function main() {
   await db.license.update({ where: { id: lapsed.license.id }, data: { status: "blocked" } });
   checkEqual("a blocked licence", (await push({ key: lapsed.license.key, deviceId: tillLapsed.deviceId }, initial)).body.code, "licence_blocked");
   checkEqual("nothing was staged by any refused request", (await itemsOf(a.shop.id)).length, 0);
+
+  group("A request has to be signed by the till itself");
+  {
+    const catalogPath = "/api/pos/v1/catalog";
+    const keyPath = "/api/pos/v1/device-key";
+    const bytes = Buffer.from(JSON.stringify(initial));
+    const keyA1 = tillKeys.get(tillA1.deviceId)!;
+    const keyA2 = tillKeys.get(tillA2.deviceId)!;
+    const identity = (deviceId: string) => ({
+      authorization: `Bearer ${a.license.key}`,
+      "x-device-id": deviceId,
+      "content-type": "application/json",
+    });
+
+    checkEqual("the licence key and device id alone are not enough",
+      (await rawPost(catalogPath, identity(tillA1.deviceId), bytes)).body.code, "signature_required");
+    checkEqual("another till's signature is refused",
+      (await rawPost(catalogPath, { ...identity(tillA1.deviceId), ...signatureHeaders(keyA2, catalogPath, bytes) }, bytes)).body.code,
+      "bad_signature");
+    const tampered = Buffer.from(JSON.stringify({ ...initial, ConfirmDestructive: true }));
+    checkEqual("a body changed after it was signed is refused",
+      (await rawPost(catalogPath, { ...identity(tillA1.deviceId), ...signatureHeaders(keyA1, catalogPath, tampered, { signedBody: bytes }) }, tampered)).body.code,
+      "bad_signature");
+    checkEqual("a signature made for another route is refused",
+      (await rawPost(catalogPath, { ...identity(tillA1.deviceId), ...signatureHeaders(keyA1, catalogPath, bytes, { signedPath: "/api/pos/v1/catalog/images/manifest" }) }, bytes)).body.code,
+      "bad_signature");
+    const old = await rawPost(catalogPath, { ...identity(tillA1.deviceId), ...signatureHeaders(keyA1, catalogPath, bytes, { at: Date.now() - 10 * 60 * 1000 }) }, bytes);
+    checkEqual("a correctly signed request from ten minutes ago is refused", old.body.code, "clock_skew");
+    check("and the refusal carries this server's time, so a till with a wrong clock can correct",
+      Math.abs(Number(old.body.serverTime) - Date.now()) < 60_000);
+    checkEqual("garbage in the signature header is refused, not a crash",
+      (await rawPost(catalogPath, { ...identity(tillA1.deviceId), "x-timestamp": String(Date.now()), "x-signature": "not-a-signature" }, bytes)).body.code,
+      "bad_signature");
+
+    // A till that has not registered a key yet.
+    const fresh = await makeTill(a.license.id, "approved", { registerKey: false });
+    const freshKey = tillKeys.get(fresh.deviceId)!;
+    checkEqual("a till with no key registered is told to register",
+      (await push({ key: a.license.key, deviceId: fresh.deviceId }, initial)).body.code, "device_key_required");
+
+    const offer = Buffer.from(JSON.stringify({ PublicKey: fresh.publicKeyBase64 }));
+    checkEqual("a key cannot be registered by someone who does not hold it",
+      (await rawPost(keyPath, { ...identity(fresh.deviceId), ...signatureHeaders(keyA1, keyPath, offer) }, offer)).body.code, "bad_signature");
+    checkEqual("something that is not a P-256 public key is refused",
+      (await rawPost(keyPath, { ...identity(fresh.deviceId), ...signatureHeaders(freshKey, keyPath, Buffer.from(JSON.stringify({ PublicKey: "AAAA" }))) },
+        Buffer.from(JSON.stringify({ PublicKey: "AAAA" })))).body.code, "invalid_key");
+    const registered = await rawPost(keyPath, { ...identity(fresh.deviceId), ...signatureHeaders(freshKey, keyPath, offer) }, offer);
+    check("the till registers its key", registered.status === 200 && registered.body.registered === true, JSON.stringify(registered.body));
+    const again = await rawPost(keyPath, { ...identity(fresh.deviceId), ...signatureHeaders(freshKey, keyPath, offer) }, offer);
+    check("registering the same key again is accepted and changes nothing", again.status === 200 && again.body.registered === false);
+
+    const intruder = newSigningKey();
+    const intruderOffer = Buffer.from(JSON.stringify({ PublicKey: intruder.publicKeyBase64 }));
+    const takeover = await rawPost(keyPath, { ...identity(fresh.deviceId), ...signatureHeaders(intruder.privateKey, keyPath, intruderOffer) }, intruderOffer);
+    checkEqual("a second machine with a copy of the till's database cannot replace the key", takeover.body.code, "device_key_mismatch");
+    checkEqual("and the till's own key is still the one on file",
+      (await db.device.findUnique({ where: { id: fresh.rowId } }))?.posPublicKey, fresh.publicKeyBase64);
+
+    await db.device.update({ where: { id: fresh.rowId }, data: { lastKnownIp: "203.0.113.9" } });
+    checkEqual("an ordinary update to the device (a check-in) keeps its key",
+      (await db.device.findUnique({ where: { id: fresh.rowId } }))?.posPublicKey, fresh.publicKeyBase64);
+    await db.device.update({ where: { id: fresh.rowId }, data: { status: "rejected" } });
+    checkEqual("a device that stops being approved loses its key",
+      (await db.device.findUnique({ where: { id: fresh.rowId } }))?.posPublicKey, null);
+    await db.device.update({ where: { id: fresh.rowId }, data: { status: "approved" } });
+    checkEqual("approved again, it has to register again",
+      (await push({ key: a.license.key, deviceId: fresh.deviceId }, initial)).body.code, "device_key_required");
+
+    checkEqual("nothing was staged by any of these", (await itemsOf(a.shop.id)).length, 0);
+  }
 
   group("A body that is not a change set");
   checkEqual("not JSON", (await push(credsA1, "{not json")).status, 400);

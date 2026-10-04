@@ -23,21 +23,20 @@ const json = (body: unknown, status: number) =>
   Response.json(body, { status, headers: { "cache-control": "no-store" } });
 
 export async function POST(request: Request, context: { params: Promise<{ hash: string }> }): Promise<Response> {
+  // Refuse an oversized body from its declared length, before the guard reads any of it.
+  const declared = Number(request.headers.get("content-length") ?? "0");
+  if (declared > MAX_IMAGE_BYTES) {
+    return json({ error: `A picture may be at most ${MAX_IMAGE_BYTES / 1024} KB.`, code: "too_large" }, 413);
+  }
+
   const guard = await authenticateTill(request);
   if (!guard.ok) return refusal(guard);
   if (guard.caller.licenceExpired) {
     return json({ error: "This licence has expired. Renew it to publish the catalogue.", code: "licence_expired" }, 403);
   }
 
-  // Refuse an oversized body from its declared length, before reading any of it.
-  const declared = Number(request.headers.get("content-length") ?? "0");
-  if (declared > MAX_IMAGE_BYTES) {
-    return json({ error: `A picture may be at most ${MAX_IMAGE_BYTES / 1024} KB.`, code: "too_large" }, 413);
-  }
-
   const { hash } = await context.params;
-  const bytes = Buffer.from(await request.arrayBuffer());
-  const result = await storeImage(guard.caller, hash, bytes);
+  const result = await storeImage(guard.caller, hash, guard.body);
   if (!result.ok) return json({ error: result.error, code: result.code }, result.status);
   if (!result.alreadyHeld) notifyWebPlatform(guard.caller.shopId);
   return json({ hash: result.hash, alreadyHeld: result.alreadyHeld }, 200);
