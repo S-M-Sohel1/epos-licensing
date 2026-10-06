@@ -348,6 +348,23 @@ model Device {
     /// a shop cycling slots, not to stop support fixing something. Null means
     /// "never self-released", which is the state of every device predating this.
     lastSelfReleaseAt DateTime?
+
+    /// Whether this till may publish the shop's catalogue to its website
+    /// (POST /api/pos/v1/catalog). The till has its own permission check for
+    /// staff, but that is a policy inside the till: this is the control the
+    /// server can enforce, since it cannot see who is standing at the till.
+    /// The first till to publish for a shop is granted it; after that the
+    /// owner decides. Added by prisma/sql/pos-sync-schema.sql.
+    canPublishCatalog Boolean @default(false)
+
+    /// The public half of the key this till signs every /api/pos/v1 request
+    /// with: base64 SubjectPublicKeyInfo, ECDSA P-256. The private half stays in
+    /// the till's Windows key store and cannot be exported, so a copy of the
+    /// till's database on another machine cannot make a request this service
+    /// accepts. Null until the till registers one; cleared when the device
+    /// stops being approved. Added by prisma/sql/pos-sync-schema.sql.
+    posPublicKey   String?
+    posPublicKeyAt DateTime?
     createdAt   DateTime  @default(now())
     updatedAt   DateTime  @updatedAt
 
