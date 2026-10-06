@@ -36,6 +36,14 @@ export const env = createEnv({
           "must be a PKCS#8 PEM private key (-----BEGIN PRIVATE KEY-----)",
       }),
 
+    /**
+     * Shared with the corporate website's server (its INTERNAL_API_SECRET):
+     * the bearer secret for the few routes here whose reply only that server
+     * may have, such as a password-reset link token. Unset, those routes
+     * answer 503. At least 16 characters.
+     */
+    INTERNAL_API_SECRET: z.string().min(16).optional(),
+
     /** Seed-only. Used by `pnpm db:seed` to create the single admin login. */
     ADMIN_EMAIL: z.string().email().optional(),
     ADMIN_PASSWORD: z.string().min(8).optional(),
@@ -58,6 +66,7 @@ export const env = createEnv({
     DIRECT_URL: process.env.DIRECT_URL,
     NODE_ENV: process.env.NODE_ENV,
     LICENSE_SIGNING_PRIVATE_KEY: process.env.LICENSE_SIGNING_PRIVATE_KEY,
+    INTERNAL_API_SECRET: process.env.INTERNAL_API_SECRET,
     ADMIN_EMAIL: process.env.ADMIN_EMAIL,
     ADMIN_PASSWORD: process.env.ADMIN_PASSWORD,
   },

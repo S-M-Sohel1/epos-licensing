@@ -202,7 +202,23 @@ model Customer {
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
 
-    sessions CustomerSession[]
+    sessions       CustomerSession[]
+    passwordResets CustomerPasswordReset[]
+}
+
+/// A single-use link that lets a shop owner choose a new password. Only the
+/// token's hash is stored. See src/server/customer/password-reset.ts.
+/// The table is created by prisma/sql/customer-password-reset.sql.
+model CustomerPasswordReset {
+    id         String    @id @default(cuid())
+    tokenHash  String    @unique
+    customerId String
+    customer   Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+    expiresAt  DateTime
+    usedAt     DateTime?
+    createdAt  DateTime  @default(now())
+
+    @@index([customerId])
 }
 
 /// A plain DB-backed session, not a JWT: a stored row can be revoked by
