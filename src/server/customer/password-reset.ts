@@ -100,7 +100,10 @@ export async function customerPasswordResetIsLive(token: unknown): Promise<boole
  * outstanding link dies, and the email counts as verified, since following a
  * link sent to it is exactly what verifying an address means.
  */
-export async function resetCustomerPassword(token: unknown, newPassword: unknown): Promise<{ ok: boolean; error?: string }> {
+export async function resetCustomerPassword(
+  token: unknown,
+  newPassword: unknown,
+): Promise<{ ok: boolean; error?: string; customerId?: string }> {
   // The password is checked before the link is touched: a password that is too short must
   // not cost the owner their one link.
   const password = customerPasswordRule.safeParse(newPassword);
@@ -127,7 +130,9 @@ export async function resetCustomerPassword(token: unknown, newPassword: unknown
     db.customerSession.deleteMany({ where: { customerId: row.customerId } }),
     db.customerPasswordReset.updateMany({ where: { customerId: row.customerId, usedAt: null }, data: { usedAt: new Date() } }),
   ]);
-  return { ok: true };
+  // The account is named so the website can end what it holds for this owner too: the
+  // shop admin sessions on their storefronts, which this service knows nothing about.
+  return { ok: true, customerId: row.customerId };
 }
 
 const EXPIRED = "This link has expired or has already been used. Ask for a new one.";

@@ -8,9 +8,10 @@ import { customerPasswordResetIsLive, resetCustomerPassword } from "~/server/cus
  *
  * Called server to server by the corporate website, like the rest of
  * /api/customer. It needs no shared secret: the token is the proof, it works
- * once, and nothing is returned but yes or no.
+ * once, and nothing is returned but yes or no and, to whoever just proved they
+ * hold the link, which account it was.
  *
- *   200  { ok: true }                 the password was set
+ *   200  { ok: true, customerId }     the password was set
  *   200  { ok: true, live: boolean }  answer to the "still usable?" form
  *   410  the link has expired or was already used
  *   422  the new password does not meet the rule (the link is NOT used up)
@@ -30,7 +31,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const result = await resetCustomerPassword(body.token, body.newPassword);
-  if (result.ok) return json({ ok: true }, 200);
+  if (result.ok) return json({ ok: true, customerId: result.customerId }, 200);
   // A password that breaks the rule is the visitor's to fix; anything else is the link.
   const badPassword = !!result.error && /password/i.test(result.error) && !/link/i.test(result.error);
   return json({ ok: false, error: result.error }, badPassword ? 422 : 410);

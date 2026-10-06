@@ -30,7 +30,7 @@ const FIRST_PASSWORD = "first-password-1";
 
 interface Reply {
   status: number;
-  body: { ok?: boolean; error?: string; token?: string; live?: boolean; reset?: { token: string; email: string; name: string | null; validForMinutes: number } | null };
+  body: { ok?: boolean; error?: string; token?: string; live?: boolean; customerId?: string; reset?: { token: string; email: string; name: string | null; validForMinutes: number } | null };
 }
 
 async function post(path: string, body: unknown, headers: Record<string, string> = {}): Promise<Reply> {
@@ -92,6 +92,7 @@ async function main() {
   const sessionsBefore = await db.customerSession.count({ where: { customerId: customer.id } });
   const used = await confirm(token, "second-password-2");
   check("a good password is accepted", used.status === 200 && used.body.ok === true, used.body.error);
+  checkEqual("and the reply names the account", used.body.customerId, customer.id);
   checkEqual("the new password signs in", (await signIn("second-password-2")).status, 200);
   checkEqual("the old password no longer does", (await signIn(FIRST_PASSWORD)).status, 401);
   check("every session from before is gone", sessionsBefore > 0 && (await db.customerSession.count({ where: { token: sessionBefore } })) === 0);
