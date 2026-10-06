@@ -51,8 +51,11 @@ function lowerKeys(value: unknown): Record<string, unknown> {
 
 let client: S3Client | null = null;
 
-/** Null until all five R2 settings are present. Callers answer 503, they do not throw. */
-function storage(): { client: S3Client; bucket: string; publicBase: string } | null {
+/**
+ * Null until all five R2 settings are present. Callers answer 503, they do not throw.
+ * Exported for the one other writer to this bucket, a shop's own site pictures (../shop-images.ts).
+ */
+export function storage(): { client: S3Client; bucket: string; publicBase: string } | null {
   const { R2_ACCOUNT_ID, R2_BUCKET, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_PUBLIC_BASE_URL } = env;
   if (!R2_ACCOUNT_ID || !R2_BUCKET || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY || !R2_PUBLIC_BASE_URL) return null;
 
