@@ -36,6 +36,15 @@ export const env = createEnv({
           "must be a PKCS#8 PEM private key (-----BEGIN PRIVATE KEY-----)",
       }),
 
+    /**
+     * Shared with the corporate website's server (its INTERNAL_API_SECRET):
+     * the bearer secret for the few routes here whose reply only that server
+     * may have, such as a password-reset link token. Unset, those routes
+     * answer 503. It is also what this service presents when it calls that
+     * server (see WEB_PLATFORM_URL). At least 16 characters.
+     */
+    INTERNAL_API_SECRET: z.string().min(16).optional(),
+
     /** Seed-only. Used by `pnpm db:seed` to create the single admin login. */
     ADMIN_EMAIL: z.string().email().optional(),
     ADMIN_PASSWORD: z.string().min(8).optional(),
@@ -70,7 +79,6 @@ export const env = createEnv({
      * menu still catches up within a minute from that app's own sweep.
      */
     WEB_PLATFORM_URL: z.string().url().optional(),
-    INTERNAL_API_SECRET: z.string().min(16).optional(),
   },
 
   /**
@@ -90,6 +98,7 @@ export const env = createEnv({
     DIRECT_URL: process.env.DIRECT_URL,
     NODE_ENV: process.env.NODE_ENV,
     LICENSE_SIGNING_PRIVATE_KEY: process.env.LICENSE_SIGNING_PRIVATE_KEY,
+    INTERNAL_API_SECRET: process.env.INTERNAL_API_SECRET,
     ADMIN_EMAIL: process.env.ADMIN_EMAIL,
     ADMIN_PASSWORD: process.env.ADMIN_PASSWORD,
     R2_ACCOUNT_ID: process.env.R2_ACCOUNT_ID,
@@ -98,7 +107,6 @@ export const env = createEnv({
     R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY,
     R2_PUBLIC_BASE_URL: process.env.R2_PUBLIC_BASE_URL,
     WEB_PLATFORM_URL: process.env.WEB_PLATFORM_URL,
-    INTERNAL_API_SECRET: process.env.INTERNAL_API_SECRET,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially
