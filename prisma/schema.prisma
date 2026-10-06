@@ -204,6 +204,25 @@ model Customer {
 
     sessions       CustomerSession[]
     passwordResets CustomerPasswordReset[]
+    emailVerifications CustomerEmailVerification[]
+}
+
+/// A single-use link that confirms an owner's email address is theirs. Only
+/// the token's hash is stored, with the address it was sent to: if the
+/// address on the account has changed since, the link confirms nothing.
+/// See src/server/customer/email-verification.ts. The table is created by
+/// prisma/sql/customer-email-verification.sql.
+model CustomerEmailVerification {
+    id         String    @id @default(cuid())
+    tokenHash  String    @unique
+    customerId String
+    customer   Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+    email      String
+    expiresAt  DateTime
+    usedAt     DateTime?
+    createdAt  DateTime  @default(now())
+
+    @@index([customerId])
 }
 
 /// A single-use link that lets a shop owner choose a new password. Only the

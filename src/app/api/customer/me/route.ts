@@ -29,6 +29,7 @@ export async function GET(request: Request): Promise<Response> {
         shopLimit: customer.shopLimit,
         subdomain: customer.subdomain,
         isPublished: customer.isPublished,
+        emailVerified: customer.emailVerified,
         shops: customer.shops,
       },
       license,
