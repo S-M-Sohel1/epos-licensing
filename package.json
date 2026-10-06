@@ -9,6 +9,7 @@
     "db:generate": "prisma migrate dev",
     "db:migrate": "prisma migrate deploy",
     "db:push": "prisma db push",
+    "db:sql:file": "node scripts/apply-sql-file.mjs",
     "db:seed": "prisma db seed",
     "docs:pdf": "tsx scripts/build-docs-pdf.ts",
     "db:studio": "prisma studio",
@@ -26,7 +27,8 @@
     "typecheck": "tsc --noEmit",
     "verify:admin": "tsx --env-file=.env scripts/verify-admin.ts",
     "verify": "pnpm verify:signing && pnpm verify:endpoints && pnpm verify:admin && pnpm verify:csv",
-    "verify:csv": "tsx scripts/verify-csv-converter.ts"
+    "verify:csv": "tsx scripts/verify-csv-converter.ts",
+    "verify:password-reset": "tsx --env-file=.env scripts/verify-password-reset.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.7.2",
