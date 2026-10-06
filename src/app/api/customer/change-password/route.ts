@@ -24,7 +24,9 @@ export async function POST(request: Request): Promise<Response> {
     newPassword,
   );
 
-  return json(result, result.ok ? 200 : 422);
+  // On success the account is named, so the website can end the owner's shop admin
+  // sessions on their storefronts: those were opened with the password just replaced.
+  return json(result.ok ? { ok: true, customerId: customer.id } : result, result.ok ? 200 : 422);
 }
 
 function json(body: unknown, status: number): Response {
