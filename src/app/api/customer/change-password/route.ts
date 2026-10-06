@@ -1,11 +1,16 @@
 import { changeCustomerPassword, customerFromSessionToken } from "~/server/customer/auth";
 import { bearerToken } from "~/server/customer/http";
 
-/** Self-service password change from the dashboard — requires the current password. */
+/**
+ * Self-service password change from the dashboard — requires the current
+ * password. Every other session on the account is ended; the one making the
+ * change stays signed in.
+ */
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request): Promise<Response> {
-  const customer = await customerFromSessionToken(bearerToken(request));
+  const sessionToken = bearerToken(request);
+  const customer = await customerFromSessionToken(sessionToken);
   if (!customer) {
     return json({ ok: false, error: "Not signed in." }, 401);
   }
@@ -22,6 +27,7 @@ export async function POST(request: Request): Promise<Response> {
     customer.id,
     typeof currentPassword === "string" ? currentPassword : "",
     newPassword,
+    sessionToken,
   );
 
   // On success the account is named, so the website can end the owner's shop admin

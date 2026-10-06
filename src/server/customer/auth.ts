@@ -47,6 +47,8 @@ export interface CustomerAccount {
   /** This shop's own subdomain, once activated — null until then. */
   subdomain: string | null;
   isPublished: boolean;
+  /** Whether the owner has shown the email address is theirs, by following a link sent to it. */
+  emailVerified: boolean;
   /** Every shop this account owns — empty-or-single-element until multi-shop accounts are used in practice. */
   shops: CustomerShopSummary[];
 }
@@ -172,6 +174,7 @@ export async function registerCustomer(input: unknown): Promise<CustomerAuthResu
       shopLimit: customer.shopLimit,
       subdomain: shop.subdomain,
       isPublished: shop.isPublished,
+      emailVerified: false,
       shops: [toShopSummary(shop)],
     },
   };
@@ -223,6 +226,7 @@ export async function signInCustomer(input: unknown): Promise<CustomerAuthResult
       shopLimit: customer.shopLimit,
       subdomain: shop.subdomain,
       isPublished: shop.isPublished,
+      emailVerified: customer.emailVerifiedAt !== null,
       shops: customer.shops.map(toShopSummary),
     },
   };
@@ -257,6 +261,7 @@ export async function customerFromSessionToken(
     shopLimit: session.customer.shopLimit,
     subdomain: shop.subdomain,
     isPublished: shop.isPublished,
+    emailVerified: session.customer.emailVerifiedAt !== null,
     shops: session.customer.shops.map(toShopSummary),
   };
 }
@@ -311,6 +316,8 @@ export async function changeCustomerPassword(
   customerId: string,
   currentPassword: string,
   newPassword: unknown,
+  /** The session making the change. It is the one session left signed in. */
+  keepSessionToken?: string | null,
 ): Promise<{ ok: boolean; error?: string }> {
   const customer = await db.customer.findUnique({ where: { id: customerId } });
   if (!customer?.passwordHash) return { ok: false, error: "Customer not found." };
@@ -324,7 +331,14 @@ export async function changeCustomerPassword(
   }
 
   const passwordHash = await hash(parsed.data, BCRYPT_COST);
-  await db.customer.update({ where: { id: customerId }, data: { passwordHash } });
+  // A password is changed because the old one may be known to someone else. Whoever is
+  // signed in with it elsewhere is signed out; the person changing it, here, is not.
+  await db.$transaction([
+    db.customer.update({ where: { id: customerId }, data: { passwordHash } }),
+    db.customerSession.deleteMany({
+      where: { customerId, ...(keepSessionToken ? { token: { not: keepSessionToken } } : {}) },
+    }),
+  ]);
 
   return { ok: true };
 }
@@ -350,7 +364,13 @@ export async function updateCustomerProfile(
     return { ok: false, error: `${email} is already in use by another account.` };
   }
 
-  await db.customer.update({ where: { id: customerId }, data: { name: name ?? null, email } });
+  // A new address has not been shown to be theirs, whatever the old one was.
+  const current = await db.customer.findUnique({ where: { id: customerId }, select: { email: true } });
+  const emailChanged = current?.email !== email;
+  await db.customer.update({
+    where: { id: customerId },
+    data: { name: name ?? null, email, ...(emailChanged ? { emailVerifiedAt: null } : {}) },
+  });
 
   return { ok: true };
 }
