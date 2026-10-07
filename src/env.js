@@ -79,6 +79,17 @@ export const env = createEnv({
      * menu still catches up within a minute from that app's own sweep.
      */
     WEB_PLATFORM_URL: z.string().url().optional(),
+    /**
+     * For the till's order nudge over Supabase Realtime. The same three values
+     * the corporate website's server holds: the project URL, its publishable
+     * key, and the private signing key (a JWK with a `kid`) whose tokens
+     * Realtime accepts. Whoever holds the signing key can mint a token for any
+     * shop, so it lives only in server environments. All optional: without
+     * them a till is told there is no live channel and asks once a minute.
+     */
+    SUPABASE_URL: z.string().url().optional(),
+    SUPABASE_PUBLISHABLE_KEY: z.string().min(1).optional(),
+    REALTIME_SIGNING_KEY: z.string().min(1).optional(),
   },
 
   /**
@@ -107,6 +118,9 @@ export const env = createEnv({
     R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY,
     R2_PUBLIC_BASE_URL: process.env.R2_PUBLIC_BASE_URL,
     WEB_PLATFORM_URL: process.env.WEB_PLATFORM_URL,
+    SUPABASE_URL: process.env.SUPABASE_URL,
+    SUPABASE_PUBLISHABLE_KEY: process.env.SUPABASE_PUBLISHABLE_KEY,
+    REALTIME_SIGNING_KEY: process.env.REALTIME_SIGNING_KEY,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially

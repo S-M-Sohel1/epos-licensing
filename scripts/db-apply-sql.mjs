@@ -34,6 +34,7 @@ const { PrismaClient } = require("../generated/prisma");
 /** Applied top to bottom. Later files may depend on earlier ones. */
 const ORDER = [
   "pos-sync-schema.sql", // the pos_sync schema: staged catalogue, sync log, grants
+  "pos-sync-orders.sql", // online orders on their way to a till: queue, presence, the website's functions
   "public-rls.sql", // default-deny RLS on every public table; after anything that adds one
 ];
 

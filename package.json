@@ -30,6 +30,8 @@
     "verify": "pnpm verify:signing && pnpm verify:endpoints && pnpm verify:admin && pnpm verify:csv",
     "verify:csv": "tsx scripts/verify-csv-converter.ts",
     "verify:pos-sync": "tsx --env-file=.env scripts/verify-pos-sync.ts",
+    "verify:pos-orders": "tsx --env-file=.env scripts/verify-pos-orders.ts",
+    "verify:pos-till-orders": "tsx --env-file=.env scripts/verify-pos-till-orders.ts",
     "verify:pos-till": "tsx --env-file=.env scripts/verify-pos-till.ts",
     "verify:password-reset": "tsx --env-file=.env scripts/verify-password-reset.ts",
     "verify:email-verification": "tsx --env-file=.env scripts/verify-email-verification.ts"
