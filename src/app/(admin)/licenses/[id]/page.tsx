@@ -23,6 +23,7 @@ import {
   updateLicenseAction,
 } from "~/server/actions/licenses";
 import { db } from "~/server/db";
+import { websiteAddress } from "~/server/shop-connection";
 
 export const dynamic = "force-dynamic";
 
@@ -70,6 +71,20 @@ export default async function LicenseDetailPage({
         <h1 className="vbg-title">{license.shop.name}</h1>
 
         <dl className="vbg-custom-facts vbg-span-12">
+          <div className="vbg-custom-fact">
+            <dt>Shop</dt>
+            <dd>
+              {license.shop.customerId ? (
+                <Link href={`/shops/${license.shop.customerId}/shop/${license.shop.id}`}>{license.shop.name}</Link>
+              ) : (
+                license.shop.name
+              )}
+              <br />
+              <span className="vbg-meta">
+                {websiteAddress(license.shop) ?? "no website yet"}
+              </span>
+            </dd>
+          </div>
           <div className="vbg-custom-fact">
             <dt>License key</dt>
             <dd className="vbg-mono">{license.key}</dd>

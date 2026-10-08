@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { Notice, readNotice } from "~/app/_components/notice";
 import { db } from "~/server/db";
+import { websiteAddress } from "~/server/shop-connection";
 
 export const dynamic = "force-dynamic";
 
@@ -84,6 +85,7 @@ export default async function CustomerDetailPage({
               <thead>
                 <tr>
                   <th scope="col">Shop</th>
+                  <th scope="col">Website</th>
                   <th scope="col">Email</th>
                   <th scope="col">Phone</th>
                   <th scope="col">Note</th>
@@ -98,6 +100,7 @@ export default async function CustomerDetailPage({
                         {shop.name}
                       </Link>
                     </td>
+                    <td>{websiteAddress(shop) ?? <span className="vbg-meta">none</span>}</td>
                     <td>{shop.email ?? <span className="vbg-meta">none</span>}</td>
                     <td>{shop.phone ?? <span className="vbg-meta">none</span>}</td>
                     <td>{shop.notes ?? <span className="vbg-meta">none</span>}</td>

@@ -364,3 +364,35 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* --------------------------------------------------------------------------
+ * Attention list
+ *
+ * What a shop page says is missing: one plain sentence per line, with the
+ * button that fixes it underneath when the fix is in this panel.
+ * -------------------------------------------------------------------------- */
+
+.vbg-custom-attention {
+  display: grid;
+  gap: var(--vbg-space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vbg-custom-attention li {
+  display: grid;
+  gap: var(--vbg-space-3);
+  justify-items: start;
+  padding-bottom: var(--vbg-space-5);
+  border-bottom: 1px solid var(--vbg-border-subtle);
+}
+
+.vbg-custom-attention li:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.vbg-custom-attention p {
+  margin: 0;
+}

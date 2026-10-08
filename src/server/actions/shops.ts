@@ -89,7 +89,7 @@ export async function updateShopAction(formData: FormData): Promise<void> {
   });
 
   revalidatePath("/shops");
-  redirectWithNotice(`/shops/${customerId}`, `${shop.name} updated.`, "success");
+  redirectWithNotice(editPath, `${shop.name} updated.`, "success");
 }
 
 function readShopForm(formData: FormData) {

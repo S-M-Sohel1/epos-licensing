@@ -41,5 +41,5 @@ export function redirectWithNotice(
   tone: "error" | "success" = "error",
 ): never {
   const params = new URLSearchParams({ notice, tone });
-  redirect(`${path}?${params.toString()}`);
+  redirect(`${path}${path.includes("?") ? "&" : "?"}${params.toString()}`);
 }

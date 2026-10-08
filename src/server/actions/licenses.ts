@@ -27,16 +27,20 @@ export async function createLicenseAction(formData: FormData): Promise<void> {
     validUntil: formData.get("validUntil"),
   });
 
+  // Back to the same form, with the shop still chosen when it came from the shop's page.
+  const shopIdValue = formValue(formData, "shopId");
+  const formPath = shopIdValue ? `/licenses/new?shopId=${encodeURIComponent(shopIdValue)}` : "/licenses/new";
+
   if (!parsed.success) {
     redirectWithNotice(
-      "/licenses/new",
+      formPath,
       parsed.error.issues[0]?.message ?? "Check the form and try again.",
     );
   }
 
   const shop = await db.shop.findUnique({ where: { id: parsed.data.shopId } });
   if (!shop)
-    redirectWithNotice("/licenses/new", "That customer no longer exists.");
+    redirectWithNotice("/licenses/new", "That shop no longer exists.");
 
   const license = await db.license.create({
     data: {
