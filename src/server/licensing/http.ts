@@ -141,6 +141,9 @@ export function serializeResponseBody(
     );
   }
 
+  // Additive too: a client that predates this ignores it.
+  if (body.Website !== undefined) parts.push(`"Website":${JSON.stringify(body.Website)}`);
+
   if (body.MaxDevices !== undefined)
     parts.push(`"MaxDevices":${body.MaxDevices}`);
   if (body.ApprovedCount !== undefined) {

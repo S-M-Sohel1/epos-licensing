@@ -6,6 +6,7 @@ import {
 } from "generated/prisma";
 
 import { db } from "~/server/db";
+import { websiteAddress } from "~/server/shop-connection";
 
 import { formatGeo, geoMatchesCluster, type RequestGeo } from "./geo";
 import { normalizeLicenseKey } from "./license-key";
@@ -39,6 +40,12 @@ export interface LicenseServerResponseBody {
    */
   TerminalNumber?: number;
   TerminalNumberSignature?: string;
+  /**
+   * The shop's website address, or null when the shop has none yet. Present only on an approved
+   * response. The till shows its online menu and online orders only for a shop with a website.
+   * Not signed: it only decides what the till shows; the till routes refuse a shop without one.
+   */
+  Website?: string | null;
 }
 
 export interface LicenseServerResult {
@@ -795,12 +802,17 @@ async function approvedResult(
   approvedDevice: Device,
 ): Promise<LicenseServerResult> {
   const device = await allocateTerminalNumber(approvedDevice);
+  const shop = await db.shop.findUnique({
+    where: { id: license.shopId },
+    select: { subdomain: true, customDomain: true, isPublished: true },
+  });
   return {
     status: 200,
     body: {
       License: buildSignedBlob(license, device, "approved"),
       ApprovalState: "approved",
       Error: null,
+      Website: shop ? websiteAddress(shop) : null,
       // Emitted on every approved response, not just the one that allocated it.
       // A till that reinstalls, or loses the setting, or simply checks in daily
       // is told its own number again each time, so the client never has to

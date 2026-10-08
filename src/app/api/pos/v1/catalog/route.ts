@@ -1,5 +1,5 @@
 import { applyPush, parsePush } from "~/server/pos-sync/catalog";
-import { authenticateTill, refusal } from "~/server/pos-sync/guard";
+import { authenticateTill, noWebsite, refusal } from "~/server/pos-sync/guard";
 import { notifyWebPlatform } from "~/server/pos-sync/notify";
 
 /**
@@ -13,7 +13,7 @@ import { notifyWebPlatform } from "~/server/pos-sync/notify";
  *   202  held: the push would take a large share of the menu offline and waits for the owner
  *   400  not a change set
  *   401  no or unknown licence key, or the request is not signed by this till's key
- *   403  licence blocked or expired, till not approved, or not the shop's publishing till
+ *   403  licence blocked or expired, till not approved, not the shop's publishing till, or the shop has no website
  *   409  the till's database is not from this shop's lineage
  *
  * Versioned under /v1 so a change to sync never forces a risky deploy of the
@@ -27,6 +27,7 @@ const json = (body: unknown, status: number) =>
 export async function POST(request: Request): Promise<Response> {
   const guard = await authenticateTill(request);
   if (!guard.ok) return refusal(guard);
+  if (!guard.caller.hasWebsite) return noWebsite();
   const { caller } = guard;
 
   // Publishing starts something new, so unlike draining orders it needs a licence in date.
