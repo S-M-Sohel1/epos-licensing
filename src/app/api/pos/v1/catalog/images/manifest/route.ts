@@ -1,4 +1,4 @@
-import { authenticateTill, refusal } from "~/server/pos-sync/guard";
+import { authenticateTill, noWebsite, refusal } from "~/server/pos-sync/guard";
 import { applyManifest } from "~/server/pos-sync/images";
 import { notifyWebPlatform } from "~/server/pos-sync/notify";
 
@@ -17,6 +17,7 @@ const json = (body: unknown, status: number) =>
 export async function POST(request: Request): Promise<Response> {
   const guard = await authenticateTill(request);
   if (!guard.ok) return refusal(guard);
+  if (!guard.caller.hasWebsite) return noWebsite();
   if (guard.caller.licenceExpired) {
     return json({ error: "This licence has expired. Renew it to publish the catalogue.", code: "licence_expired" }, 403);
   }

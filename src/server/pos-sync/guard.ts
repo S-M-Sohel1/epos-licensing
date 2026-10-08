@@ -23,6 +23,11 @@ export interface PosCaller {
    * Routes that START something new (publishing a catalogue) check it.
    */
   licenceExpired: boolean;
+  /**
+   * The shop has a website (a subdomain or its own domain). A shop without one has nowhere to
+   * show a catalogue, so publishing is refused until it gets one.
+   */
+  hasWebsite: boolean;
 }
 
 type Refusal = {
@@ -136,7 +141,10 @@ async function identifyTill(request: Request): Promise<Identified> {
     );
   }
 
-  const license = await db.license.findUnique({ where: { key } });
+  const license = await db.license.findUnique({
+    where: { key },
+    include: { shop: { select: { subdomain: true, customDomain: true } } },
+  });
   if (!license) return refuse(401, "unknown_licence", "Licence key not recognised.");
   if (license.status === "blocked") {
     return refuse(403, "licence_blocked", "This licence is blocked.");
@@ -169,6 +177,7 @@ async function identifyTill(request: Request): Promise<Identified> {
       deviceRowId: device.id,
       canPublishCatalog: device.canPublishCatalog,
       licenceExpired: license.validUntil.getTime() < Date.now(),
+      hasWebsite: Boolean(license.shop.subdomain ?? license.shop.customDomain),
     },
   };
 }
@@ -282,6 +291,14 @@ export async function registerDeviceKey(request: Request): Promise<RegisterResul
     INSERT INTO pos_sync.sync_log ("shopId", "deviceRowId", "kind", "detail")
     VALUES (${caller.shopId}, ${caller.deviceRowId}, 'device_key_registered', '{}'::jsonb)`;
   return { ok: true, registered: true };
+}
+
+/** The refusal for a publish from a shop with no website. The till hides publishing for such a shop; this is the backstop. */
+export function noWebsite(): Response {
+  return Response.json(
+    { error: "This shop has no website yet, so there is nowhere to publish the catalogue.", code: "no_website" },
+    { status: 403, headers: { "cache-control": "no-store" } },
+  );
 }
 
 /** The JSON body every refusal on `/api/pos/v1/*` carries: a stable `code` for the till, a sentence for a person. */
