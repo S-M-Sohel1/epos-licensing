@@ -13,7 +13,8 @@ const templateIdRule = z.nativeEnum(TemplateId).default(TemplateId.general);
  * gated on `Customer.shopLimit`.
  */
 
-const RESERVED_SUBDOMAINS = new Set(["www", "dashboard", "admin", "api", "store"]);
+// "lic" is the licensing backend (lic.epos-365.com); the other three are near-misses of it.
+const RESERVED_SUBDOMAINS = new Set(["www", "dashboard", "admin", "api", "store", "lic", "licensing", "license", "licence"]);
 
 export const slugRule = z
   .string()
