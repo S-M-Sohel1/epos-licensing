@@ -4,6 +4,7 @@ import { Notice, readNotice } from "~/app/_components/notice";
 import { toDateInputValue } from "~/app/_lib/format";
 import { createLicenseAction } from "~/server/actions/licenses";
 import { db } from "~/server/db";
+import { describeShop } from "~/server/shop-connection";
 
 export const dynamic = "force-dynamic";
 
@@ -14,17 +15,25 @@ export const dynamic = "force-dynamic";
  * three things that vary per customer. Nothing here asks for a device: a
  * license exists before any till has been seen, and the first till to activate
  * claims the baseline slot on its own.
+ *
+ * Usually reached from a shop's own page ("Give this shop a license"), which passes `shopId` so
+ * there is no shop to pick. Picked from the list, each shop is named with its website and owner:
+ * a licence on the wrong shop sends that shop's menu to the wrong website.
  */
 export default async function NewLicensePage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const { notice, tone } = readNotice(await searchParams);
+  const query = await searchParams;
+  const { notice, tone } = readNotice(query);
+  const chosenId = typeof query.shopId === "string" ? query.shopId : null;
   const shops = await db.shop.findMany({
     orderBy: { name: "asc" },
     include: { customer: true },
   });
+
+  const chosen = chosenId ? (shops.find((shop) => shop.id === chosenId) ?? null) : null;
 
   const defaultExpiry = new Date();
   defaultExpiry.setUTCFullYear(defaultExpiry.getUTCFullYear() + 1);
@@ -53,23 +62,41 @@ export default async function NewLicensePage({
 
           <form action={createLicenseAction} className="vbg-span-7">
             <div className="vbg-custom-form-row">
-              <div className="vbg-field">
-                <label className="vbg-label" htmlFor="shopId">
-                  Shop
-                </label>
-                <select id="shopId" name="shopId" required defaultValue="">
-                  <option value="" disabled>
-                    Choose a shop
-                  </option>
-                  {shops.map((shop) => (
-                    <option key={shop.id} value={shop.id}>
-                      {shop.customer?.name && shop.customer.name !== shop.name
-                        ? `${shop.name} — ${shop.customer.name}`
-                        : shop.name}
+              {chosen ? (
+                <div className="vbg-field">
+                  <span className="vbg-label">Shop</span>
+                  <input type="hidden" name="shopId" value={chosen.id} />
+                  <p className="vbg-reading" style={{ margin: 0 }}>
+                    <strong>{chosen.name}</strong>
+                    <br />
+                    {describeShop(chosen).split(" · ").slice(1).join(" · ")}
+                  </p>
+                  <p className="vbg-helper">
+                    This shop&rsquo;s tills will send its menu to this website.{" "}
+                    <Link href="/licenses/new">Choose a different shop</Link>
+                  </p>
+                </div>
+              ) : (
+                <div className="vbg-field">
+                  <label className="vbg-label" htmlFor="shopId">
+                    Shop
+                  </label>
+                  <select id="shopId" name="shopId" required defaultValue="">
+                    <option value="" disabled>
+                      Choose a shop
                     </option>
-                  ))}
-                </select>
-              </div>
+                    {shops.map((shop) => (
+                      <option key={shop.id} value={shop.id}>
+                        {describeShop(shop)}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="vbg-helper">
+                    The shop&rsquo;s tills send its menu to the website shown. Easiest from the
+                    shop&rsquo;s own page: Customers &rsaquo; the owner &rsaquo; the shop.
+                  </p>
+                </div>
+              )}
 
               <div className="vbg-field">
                 <label className="vbg-label" htmlFor="maxDevices">
