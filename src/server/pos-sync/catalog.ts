@@ -73,6 +73,12 @@ const productValues = z.object({
   updatedat: z.string().regex(POS_TIMESTAMP),
 });
 
+/** One of the till's VAT rates. The website offers these for items sold online only. */
+const taxRate = z.preprocess(
+  lowerKeys,
+  z.object({ name: text.max(100), percent: z.number().min(0).max(100).finite() }),
+);
+
 const envelope = z.object({
   formatversion: z.literal(1),
   lineage: text.max(100),
@@ -80,6 +86,8 @@ const envelope = z.object({
   deletions: z.array(z.unknown()).default([]),
   /** Set only when the shop's owner has confirmed a push that was held. */
   confirmdestructive: z.boolean().default(false),
+  /** The till's VAT rates, on the last request of a publish. Absent from a till that predates them. */
+  taxrates: z.array(taxRate).max(50).nullish(),
 });
 
 interface CategoryRow {
@@ -108,9 +116,16 @@ interface Tombstone {
   deletedAt: string;
 }
 
+export interface TillTaxRate {
+  name: string;
+  percent: number;
+}
+
 interface ParsedPush {
   lineage: string;
   confirmDestructive: boolean;
+  /** Null when the till did not send them: the ones already stored stand. */
+  taxRates: TillTaxRate[] | null;
   categories: CategoryRow[];
   items: ItemRow[];
   deletedCategories: Tombstone[];
@@ -138,6 +153,7 @@ export function parsePush(body: unknown, now = Date.now()): ParseResult {
   const push: ParsedPush = {
     lineage: parsed.data.lineage,
     confirmDestructive: parsed.data.confirmdestructive,
+    taxRates: parsed.data.taxrates ?? null,
     categories: [],
     items: [],
     deletedCategories: [],
@@ -245,6 +261,8 @@ export type PushOutcome =
       /** Rows this server already held a newer or equal version of. Not an error: last write wins. */
       stale: number;
       rejected: ParsedPush["rejected"];
+      /** How many VAT rates were stored, or null when the push carried none. */
+      taxRates: number | null;
     }
   | { kind: "held"; heldId: string; reason: string; rejected: ParsedPush["rejected"] }
   | { kind: "refused"; status: 403 | 409; code: string; error: string };
@@ -347,6 +365,14 @@ export async function applyPush(caller: PosCaller, push: ParsedPush): Promise<Pu
         };
       }
 
+      // Not part of the catalogue's version: the website reads them when an owner edits an
+      // item, and nothing on the shop's pages changes with them. Stored even if the rows below
+      // are held, since they cannot take anything off the menu.
+      if (push.taxRates) {
+        await tx.$executeRaw`
+          UPDATE pos_sync.catalog_state SET "taxRates" = ${JSON.stringify(push.taxRates)}::jsonb WHERE "shopId" = ${shopId}`;
+      }
+
       if (!push.confirmDestructive) {
         const { live, removed } = await wouldRemove(tx, shopId, push);
         if (live >= DESTRUCTIVE_MIN_LIVE && removed > live * DESTRUCTIVE_SHARE) {
@@ -444,6 +470,7 @@ export async function applyPush(caller: PosCaller, push: ParsedPush): Promise<Pu
         applied: { categories, items, deletedCategories, deletedItems },
         stale: sent - changed,
         rejected: push.rejected,
+        taxRates: push.taxRates ? push.taxRates.length : null,
       };
     },
     { timeout: 30_000, maxWait: 10_000 },

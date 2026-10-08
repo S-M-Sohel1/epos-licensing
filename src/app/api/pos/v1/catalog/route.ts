@@ -58,7 +58,14 @@ export async function POST(request: Request): Promise<Response> {
     case "applied":
       if (Object.values(outcome.applied).some((count) => count > 0)) notifyWebPlatform(caller.shopId);
       return json(
-        { version: outcome.version, applied: outcome.applied, stale: outcome.stale, rejected: outcome.rejected },
+        {
+          version: outcome.version,
+          applied: outcome.applied,
+          stale: outcome.stale,
+          rejected: outcome.rejected,
+          // Only when the push carried them: a till records its VAT rates as sent on seeing this.
+          ...(outcome.taxRates === null ? {} : { taxRates: outcome.taxRates }),
+        },
         200,
       );
   }

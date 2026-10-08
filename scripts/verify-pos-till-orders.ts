@@ -55,7 +55,7 @@ function runTill(env: Record<string, string>): Promise<{ code: number; phase: st
   });
 }
 
-function payload(orderRef: string, posId: string, kind: "delivery" | "pickup") {
+function payload(orderRef: string, posId: string, kind: "delivery" | "pickup" | "unknown-vat") {
   const base = {
     schemaVersion: 1,
     orderRef,
@@ -74,7 +74,22 @@ function payload(orderRef: string, posId: string, kind: "delivery" | "pickup") {
       totals: { subtotalCents: 2200, deliveryFeeCents: 350, discountCents: 100, totalCents: 2450 },
       lines: [
         { posId, name: "Lamb Bhuna", quantity: 2, unitPriceCents: 950, notes: "HOT — no onion", modifiers: [] },
-        { posId: null, name: "Mango Lassi", quantity: 1, unitPriceCents: 300, notes: null, modifiers: [] },
+        // Sold online only, at a VAT rate the till has: rung at 23%.
+        { posId: null, name: "Mango Lassi", quantity: 1, unitPriceCents: 300, notes: null, modifiers: [], taxRatePercent: 23 },
+      ],
+    };
+  }
+  if (kind === "unknown-vat") {
+    // An online-only item at a rate the till does not have: rung at the default rate and flagged.
+    return {
+      ...base,
+      type: "PICKUP",
+      address: null,
+      notes: null,
+      totals: { subtotalCents: 1050, deliveryFeeCents: 0, discountCents: 0, totalCents: 1050 },
+      lines: [
+        { posId, name: "Lamb Bhuna", quantity: 1, unitPriceCents: 950, notes: null, modifiers: [] },
+        { posId: null, name: "Mystery tea", quantity: 1, unitPriceCents: 100, notes: null, modifiers: [], taxRatePercent: 7 },
       ],
     };
   }
@@ -110,7 +125,7 @@ async function main() {
   const posId = randomUUID();
   const refs = [`${RUN}-delivery`, `${RUN}-pickup-1`, `${RUN}-pickup-2`];
   for (const [i, ref] of refs.entries()) {
-    const body = payload(ref, posId, i === 0 ? "delivery" : "pickup");
+    const body = payload(ref, posId, i === 0 ? "delivery" : i === 1 ? "pickup" : "unknown-vat");
     await db.$queryRaw`SELECT pos_sync.enqueue_order_v1(${shopId}, ${ref}, ${JSON.stringify(body)}::jsonb)`;
   }
 
