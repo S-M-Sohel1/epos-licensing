@@ -396,3 +396,38 @@
 .vbg-custom-attention p {
   margin: 0;
 }
+
+/* --------------------------------------------------------------------------
+ * Choices
+ *
+ * A short list of radio options, each with a name and one line saying what it
+ * means. The whole row is the label, so the description is clickable too.
+ * -------------------------------------------------------------------------- */
+
+.vbg-custom-choices {
+  display: grid;
+  gap: var(--vbg-space-4);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.vbg-custom-choice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--vbg-space-3);
+  align-items: start;
+  cursor: pointer;
+}
+
+.vbg-custom-choice input {
+  margin-top: 0.3em;
+  width: 1.1rem;
+  height: 1.1rem;
+  cursor: pointer;
+}
+
+.vbg-custom-choice input:focus-visible {
+  outline: 2px solid var(--vbg-focus);
+  outline-offset: 2px;
+}
