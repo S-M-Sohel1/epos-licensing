@@ -39,6 +39,11 @@ CREATE TABLE IF NOT EXISTS pos_sync.catalog_state (
     "updatedAt" timestamptz NOT NULL DEFAULT now()
 );
 
+-- The till's VAT rates, as it last sent them: [{ "name": "Standard", "percent": 23 }, ...]. The
+-- website offers them when an owner sets the VAT rate of an item sold online only, and the till
+-- rings that item's orders at the chosen rate. Null until a till that sends them publishes.
+ALTER TABLE pos_sync.catalog_state ADD COLUMN IF NOT EXISTS "taxRates" jsonb;
+
 CREATE TABLE IF NOT EXISTS pos_sync.catalog_category (
     "shopId"         text NOT NULL,
     -- The row's GlobalId on the till: the same on every till in the shop.

@@ -34,8 +34,10 @@ const RUN = `verify-pos-${Date.now()}`;
 
 const shopIds: string[] = [];
 
-async function makeShop(label: string, options: { expired?: boolean } = {}) {
-  const shop = await db.shop.create({ data: { name: `${RUN} ${label}`, email: `${RUN}@example.invalid` } });
+async function makeShop(label: string, options: { expired?: boolean; noWebsite?: boolean } = {}) {
+  // A shop publishes only once it has a website, so every fixture has a subdomain unless told not to.
+  const subdomain = options.noWebsite ? null : `${RUN}-${label}`.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  const shop = await db.shop.create({ data: { name: `${RUN} ${label}`, email: `${RUN}@example.invalid`, subdomain } });
   shopIds.push(shop.id);
   const validUntil = new Date();
   validUntil.setUTCFullYear(validUntil.getUTCFullYear() + (options.expired ? -1 : 1));
@@ -126,6 +128,7 @@ interface Reply {
     held?: boolean;
     applied?: { categories: number; items: number; deletedCategories: number; deletedItems: number };
     rejected?: { table: string; posId: string; reason: string }[];
+    taxRates?: number;
   };
 }
 
@@ -256,6 +259,8 @@ async function main() {
   const tillAPending = await makeTill(a.license.id, "pending");
   const tillB = await makeTill(b.license.id);
   const tillLapsed = await makeTill(lapsed.license.id);
+  const noWebsite = await makeShop("Shop No Website", { noWebsite: true });
+  const tillNoWebsite = await makeTill(noWebsite.license.id);
 
   const lineage = `lineage-${RUN}`;
   const t0 = stamp(-60_000);
@@ -290,6 +295,7 @@ async function main() {
   checkEqual("an expired licence cannot publish", (await push({ key: lapsed.license.key, deviceId: tillLapsed.deviceId }, initial)).body.code, "licence_expired");
   await db.license.update({ where: { id: lapsed.license.id }, data: { status: "blocked" } });
   checkEqual("a blocked licence", (await push({ key: lapsed.license.key, deviceId: tillLapsed.deviceId }, initial)).body.code, "licence_blocked");
+  checkEqual("a shop with no website has nowhere to publish", (await push({ key: noWebsite.license.key, deviceId: tillNoWebsite.deviceId }, changeSet(`lineage-${RUN}-nw`, { categories: [], products: [] }))).body.code, "no_website");
   checkEqual("nothing was staged by any refused request", (await itemsOf(a.shop.id)).length, 0);
 
   group("A request has to be signed by the till itself");
@@ -411,6 +417,20 @@ async function main() {
   checkEqual("nothing counted as applied", (again.body.applied?.items ?? 0) + (again.body.applied?.categories ?? 0), 0);
   checkEqual("all eighteen rows reported as already held", again.body.stale, 18);
   checkEqual("the version did not move", await versionOf(a.shop.id), 1);
+
+  group("VAT rates");
+  const withRates = await push(credsA1, { ...initial, TaxRates: [{ Name: "Standard", Percent: 23 }, { Name: "Reduced", Percent: 13.5 }] });
+  checkEqual("a push carrying the till's VAT rates is accepted", withRates.status, 200);
+  checkEqual("and the reply says how many were stored", withRates.body.taxRates, 2);
+  const storedRates = async () =>
+    (await db.$queryRaw<{ taxRates: unknown }[]>`SELECT "taxRates" FROM pos_sync.catalog_state WHERE "shopId" = ${a.shop.id}`)[0]?.taxRates;
+  checkEqual("they are stored against the shop", JSON.stringify(await storedRates()),
+    JSON.stringify([{ name: "Standard", percent: 23 }, { name: "Reduced", percent: 13.5 }]));
+  checkEqual("they do not move the catalogue's version", await versionOf(a.shop.id), 1);
+  const withoutRates = await push(credsA1, initial);
+  check("a push without them says nothing about them", withoutRates.status === 200 && !("taxRates" in withoutRates.body));
+  checkEqual("and leaves the stored ones as they were", (await storedRates() as unknown[] | null)?.length, 2);
+  checkEqual("a rate over 100% is not a change set", (await push(credsA1, { ...initial, TaxRates: [{ Name: "Odd", Percent: 150 }] })).status, 400);
 
   group("Last write wins, on the till's own clock");
   const newer = await push(credsA1, changeSet(lineage, { products: [{ id: "item-01", values: product(food, "Item 1", 7.5, stamp()) }] }));
