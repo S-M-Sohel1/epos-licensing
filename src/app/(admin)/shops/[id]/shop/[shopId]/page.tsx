@@ -3,9 +3,9 @@ import { notFound } from "next/navigation";
 
 import { Notice, readNotice } from "~/app/_components/notice";
 import { describeExpiry, formatDate, formatDateTime } from "~/app/_lib/format";
-import { updateShopAction } from "~/server/actions/shops";
+import { setShopTemplateAction, updateShopAction } from "~/server/actions/shops";
 import { db } from "~/server/db";
-import { getShopConnection, type WebsiteState } from "~/server/shop-connection";
+import { getShopConnection, TEMPLATE_LABELS, type WebsiteState } from "~/server/shop-connection";
 
 export const dynamic = "force-dynamic";
 
@@ -157,6 +157,43 @@ export default async function ShopPage({
             ))}
           </ul>
         )}
+      </section>
+
+      <section className="vbg-section" id="template">
+        <h2 className="vbg-heading-24">Website template</h2>
+        <p className="vbg-reading vbg-span-7">
+          What the shop&rsquo;s website shows. The owner picks it once, when the website is first
+          switched on, and cannot change it themselves. Changing it here deletes nothing: the menu,
+          orders, staff and photos stay and come back with the restaurant template.
+        </p>
+        <form action={setShopTemplateAction} className="vbg-span-7">
+          <input type="hidden" name="id" value={shop.id} />
+          <input type="hidden" name="customerId" value={id} />
+          <fieldset className="vbg-custom-choices">
+            <legend className="vbg-visually-hidden">Website template</legend>
+            {(Object.keys(TEMPLATE_LABELS) as (keyof typeof TEMPLATE_LABELS)[]).map((templateId) => (
+              <label key={templateId} className="vbg-custom-choice">
+                <input
+                  type="radio"
+                  name="templateId"
+                  value={templateId}
+                  defaultChecked={shop.templateId === templateId}
+                />
+                <span>
+                  <strong>{TEMPLATE_LABELS[templateId].name}</strong>
+                  {shop.templateId === templateId && <span className="vbg-meta"> · in use now</span>}
+                  <br />
+                  <span className="vbg-meta">{TEMPLATE_LABELS[templateId].description}</span>
+                </span>
+              </label>
+            ))}
+          </fieldset>
+          <div className="vbg-custom-actions" style={{ marginTop: "var(--vbg-space-5)" }}>
+            <button type="submit" className="vbg-button">
+              Save template
+            </button>
+          </div>
+        </form>
       </section>
 
       <section className="vbg-section">

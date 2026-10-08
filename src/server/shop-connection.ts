@@ -1,3 +1,4 @@
+import type { TemplateId } from "generated/prisma";
 import { db } from "~/server/db";
 import { effectiveLicenseState, type EffectiveLicenseState } from "~/app/_lib/format";
 
@@ -36,6 +37,21 @@ export function describeShop(shop: WebsiteFields & { name: string; customer?: { 
   if (owner && owner !== shop.name) parts.push(owner);
   return parts.join(" · ");
 }
+
+/**
+ * The storefronts a shop's website can show, named the way the owner's own sign-up wizard names
+ * them (epos_corporate_web, dashboard/subdomain/_lib/templates.ts).
+ */
+export const TEMPLATE_LABELS: Record<TemplateId, { name: string; description: string }> = {
+  restaurant: {
+    name: "Restaurant or takeaway",
+    description: "The full website: menu, online ordering, delivery and pickup, and the shop's own admin for orders and the menu.",
+  },
+  general: {
+    name: "Simple page",
+    description: "Only the shop's name on a coloured page. No menu, no ordering and no admin.",
+  },
+};
 
 export type WebsiteState = "live" | "not_published" | "none";
 
@@ -143,6 +159,15 @@ export async function getShopConnection(shopId: string, now = new Date()): Promi
   if (!address && licences.length > 0) {
     problems.push({
       text: "This shop has a license but no website yet. The owner sets the website up from their own account.",
+    });
+  }
+
+  if (address && shop.templateId !== "restaurant") {
+    problems.push({
+      text: `This shop's website uses the “${TEMPLATE_LABELS[shop.templateId].name}” template: only its name on a coloured page, with no menu, no ordering and no admin.${
+        menu.items > 0 ? ` Its till has sent ${menu.items.toLocaleString("en-GB")} products that the website cannot show.` : ""
+      }`,
+      action: { label: "Change the template", href: "#template" },
     });
   }
 
