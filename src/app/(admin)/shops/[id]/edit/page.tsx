@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Notice, readNotice } from "~/app/_components/notice";
 import { updateCustomerAction } from "~/server/actions/customers";
 import { db } from "~/server/db";
+import { customerDisplayName } from "~/server/customer/display-name";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +24,7 @@ export default async function EditCustomerPage({
   return (
     <section className="vbg-section">
       <p className="vbg-meta">
-        <Link href={`/shops/${customer.id}`}>{customer.name ?? "(unnamed)"}</Link>
+        <Link href={`/shops/${customer.id}`}>{customerDisplayName(customer)}</Link>
       </p>
       <h1 className="vbg-title">Edit customer</h1>
 

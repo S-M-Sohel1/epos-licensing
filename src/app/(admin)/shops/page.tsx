@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { Notice, readNotice } from "~/app/_components/notice";
 import { db } from "~/server/db";
+import { customerDisplayName } from "~/server/customer/display-name";
 
 export const dynamic = "force-dynamic";
 
@@ -68,7 +69,7 @@ export default async function ShopsPage({
                     <tr key={customer.id}>
                       <td>
                         <Link href={`/shops/${customer.id}`}>
-                          {customer.name ?? "(unnamed)"}
+                          {customerDisplayName(customer)}
                         </Link>
                       </td>
                       <td>{customer.email ?? <span className="vbg-meta">none</span>}</td>
