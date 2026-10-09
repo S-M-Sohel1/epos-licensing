@@ -6,6 +6,7 @@ import { z } from "zod";
 import { AuditEventType, TemplateId } from "generated/prisma";
 import { BCRYPT_COST, emailRule } from "~/server/admins";
 import { db } from "~/server/db";
+import { nameOrNull } from "~/server/customer/display-name";
 
 /**
  * Customer accounts, as plain functions — same shape as `admins.ts`: the rules
@@ -132,7 +133,7 @@ export async function registerCustomer(input: unknown): Promise<CustomerAuthResu
         data: {
           email,
           passwordHash,
-          name: contactName ?? null,
+          name: nameOrNull(contactName),
         },
       });
       const shop = await tx.shop.create({
@@ -369,7 +370,7 @@ export async function updateCustomerProfile(
   const emailChanged = current?.email !== email;
   await db.customer.update({
     where: { id: customerId },
-    data: { name: name ?? null, email, ...(emailChanged ? { emailVerifiedAt: null } : {}) },
+    data: { name: nameOrNull(name), email, ...(emailChanged ? { emailVerifiedAt: null } : {}) },
   });
 
   return { ok: true };

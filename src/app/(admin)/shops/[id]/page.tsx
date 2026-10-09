@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Notice, readNotice } from "~/app/_components/notice";
 import { db } from "~/server/db";
 import { websiteAddress } from "~/server/shop-connection";
+import { customerDisplayName } from "~/server/customer/display-name";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +37,7 @@ export default async function CustomerDetailPage({
         <p className="vbg-meta">
           <Link href="/shops">Customers</Link>
         </p>
-        <h1 className="vbg-title">{customer.name ?? "(unnamed)"}</h1>
+        <h1 className="vbg-title">{customerDisplayName(customer)}</h1>
 
         <dl className="vbg-custom-facts vbg-span-12">
           <div className="vbg-custom-fact">

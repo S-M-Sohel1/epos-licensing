@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Notice, readNotice } from "~/app/_components/notice";
 import { createShopAction } from "~/server/actions/shops";
 import { db } from "~/server/db";
+import { customerDisplayName } from "~/server/customer/display-name";
 
 export const dynamic = "force-dynamic";
 
@@ -23,12 +24,12 @@ export default async function NewShopPage({
   return (
     <section className="vbg-section">
       <p className="vbg-meta">
-        <Link href={`/shops/${customer.id}`}>{customer.name ?? "(unnamed)"}</Link>
+        <Link href={`/shops/${customer.id}`}>{customerDisplayName(customer)}</Link>
       </p>
       <h1 className="vbg-title">Add a shop</h1>
       <p className="vbg-lede vbg-span-7">
         A second business/location under this customer&apos;s account
-        ({customer.name ?? "unnamed"}). Each shop gets its own License.
+        ({customerDisplayName(customer)}). Each shop gets its own License.
       </p>
 
       <Notice notice={notice} tone={tone} />
