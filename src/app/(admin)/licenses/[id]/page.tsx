@@ -119,7 +119,7 @@ export default async function LicenseDetailPage({
           </div>
           <div className="vbg-custom-fact">
             <dt>Label on the till</dt>
-            <dd>{license.shopLabel ?? license.shop.name}</dd>
+            <dd>{license.shopLabel || license.shop.name}</dd>
           </div>
         </dl>
 

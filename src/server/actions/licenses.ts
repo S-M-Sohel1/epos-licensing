@@ -48,7 +48,8 @@ export async function createLicenseAction(formData: FormData): Promise<void> {
       shopId: shop.id,
       // The label is what the cashier sees on their own License screen, so it
       // defaults to the customer's name rather than being left blank.
-      shopLabel: parsed.data.shopLabel?.trim() ?? shop.name,
+      // || and not ??: the form sends an untouched box as "", which is not "absent".
+      shopLabel: parsed.data.shopLabel?.trim() || shop.name,
       maxDevices: parsed.data.maxDevices,
       validUntil: endOfDay(parsed.data.validUntil),
     },
@@ -109,10 +110,14 @@ export async function updateLicenseAction(formData: FormData): Promise<void> {
     );
   }
 
+  const shopName =
+    (await db.shop.findUnique({ where: { id: before.shopId }, select: { name: true } }))?.name ?? null;
+
   const license = await db.license.update({
     where: { id: before.id },
     data: {
-      shopLabel: parsed.data.shopLabel?.trim() ?? null,
+      // A cleared box goes back to the shop's name, never to a blank on the till's screen.
+      shopLabel: parsed.data.shopLabel?.trim() || shopName,
       maxDevices: parsed.data.maxDevices,
       validUntil: endOfDay(parsed.data.validUntil),
     },
