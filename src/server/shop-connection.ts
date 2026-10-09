@@ -53,7 +53,7 @@ export const TEMPLATE_LABELS: Record<TemplateId, { name: string; description: st
   },
 };
 
-export type WebsiteState = "live" | "not_published" | "none";
+export type WebsiteState = "published" | "not_published" | "none";
 
 export type ShopConnection = {
   website: { address: string | null; state: WebsiteState };
@@ -122,7 +122,7 @@ export async function getShopConnection(shopId: string, now = new Date()): Promi
   const address = websiteAddress(shop);
   const website: ShopConnection["website"] = {
     address,
-    state: !address ? "none" : shop.isPublished ? "live" : "not_published",
+    state: !address ? "none" : shop.isPublished ? "published" : "not_published",
   };
 
   const licences = shop.licenses.map((l) => ({

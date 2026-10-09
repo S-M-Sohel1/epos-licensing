@@ -10,7 +10,7 @@ import { getShopConnection, TEMPLATE_LABELS, type WebsiteState } from "~/server/
 export const dynamic = "force-dynamic";
 
 const WEBSITE_STATE: Record<WebsiteState, { text: string; mark: string }> = {
-  live: { text: "Live", mark: "approved" },
+  published: { text: "Published", mark: "approved" },
   not_published: { text: "Set up, not published yet", mark: "pending" },
   none: { text: "No website yet", mark: "none" },
 };
