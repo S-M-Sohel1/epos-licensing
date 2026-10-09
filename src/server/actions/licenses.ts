@@ -48,7 +48,7 @@ export async function createLicenseAction(formData: FormData): Promise<void> {
       shopId: shop.id,
       // The label is what the cashier sees on their own License screen, so it
       // defaults to the customer's name rather than being left blank.
-      shopLabel: parsed.data.shopLabel?.trim() ?? shop.name,
+      shopLabel: labelOr(parsed.data.shopLabel, shop.name),
       maxDevices: parsed.data.maxDevices,
       validUntil: endOfDay(parsed.data.validUntil),
     },
@@ -65,6 +65,17 @@ export async function createLicenseAction(formData: FormData): Promise<void> {
 
   revalidatePath("/licenses");
   redirect(`/licenses/${license.id}`);
+}
+
+/**
+ * The label as typed, or the fallback when the box was left empty. The form sends an untouched
+ * box as "", which is not "absent", so `??` alone kept the empty text and the till's License
+ * screen showed "Licensed to" blank.
+ */
+function labelOr<T extends string | null>(typed: string | undefined, fallback: T): string | T {
+  const label = typed?.trim();
+  if (label) return label;
+  return fallback;
 }
 
 const updateSchema = z.object({
@@ -109,10 +120,14 @@ export async function updateLicenseAction(formData: FormData): Promise<void> {
     );
   }
 
+  const shopName =
+    (await db.shop.findUnique({ where: { id: before.shopId }, select: { name: true } }))?.name ?? null;
+
   const license = await db.license.update({
     where: { id: before.id },
     data: {
-      shopLabel: parsed.data.shopLabel?.trim() ?? null,
+      // A cleared box goes back to the shop's name, never to a blank on the till's screen.
+      shopLabel: labelOr(parsed.data.shopLabel, shopName),
       maxDevices: parsed.data.maxDevices,
       validUntil: endOfDay(parsed.data.validUntil),
     },
