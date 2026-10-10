@@ -1,6 +1,6 @@
 import { customerFromSessionToken } from "~/server/customer/auth";
 import { bearerToken } from "~/server/customer/http";
-import { latestLicenseSummary } from "~/server/customer/summary";
+import { lastRequestAt, latestLicenseSummary } from "~/server/customer/summary";
 
 /**
  * Read-only account status: shop name and the shop's most recent license, if
@@ -16,12 +16,16 @@ export async function GET(request: Request): Promise<Response> {
     return json({ ok: false, error: "Not signed in." }, 401);
   }
 
-  const license = await latestLicenseSummary(customer.shopId);
+  const [license, requestedAt] = await Promise.all([
+    latestLicenseSummary(customer.shopId),
+    lastRequestAt(customer.shops.map((shop) => shop.id)),
+  ]);
 
   return json(
     {
       ok: true,
       customer: {
+        id: customer.id,
         email: customer.email,
         name: customer.name,
         shopId: customer.shopId,
@@ -33,6 +37,7 @@ export async function GET(request: Request): Promise<Response> {
         shops: customer.shops,
       },
       license,
+      lastRequestAt: requestedAt,
     },
     200,
   );
