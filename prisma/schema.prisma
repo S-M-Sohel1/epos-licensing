@@ -527,7 +527,8 @@ model HardwareItem {
     @@index([isActive, sortOrder])
 }
 
-/// How a visitor to the corporate website reaches the business. One row, id
+/// How a visitor to the corporate website reaches the business, and who the
+/// business is where that website has to say so. One row, id
 /// "platform" (`~/server/contact-details.ts`), edited on the panel's Contact
 /// details page and read by the website through GET /api/contact.
 ///
@@ -540,6 +541,17 @@ model ContactDetails {
     /// As it should be read, e.g. "01 234 5678". The website derives the
     /// dialable form itself.
     salesPhone String?
+    /// Where the website sends quote and licence requests and news of new
+    /// accounts, and the address it shows a customer who wants to write.
+    salesEmail String?
+
+    /// The business as its privacy policy and terms must name it: the
+    /// registered name, a company number if it is a company, the address on
+    /// one line, and the inbox for questions about personal information.
+    legalName     String?
+    companyNumber String?
+    address       String?
+    privacyEmail  String?
 
     updatedAt DateTime @updatedAt
     /// The admin's email, as on an AuditEvent.
