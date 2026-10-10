@@ -55,7 +55,6 @@ export async function saveContactDetailsAction(formData: FormData): Promise<void
   });
 
   revalidatePath("/contact");
-  revalidatePath("/api/contact");
   redirectWithNotice(
     "/contact",
     salesPhone
