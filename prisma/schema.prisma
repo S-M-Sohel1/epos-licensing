@@ -527,6 +527,25 @@ model HardwareItem {
     @@index([isActive, sortOrder])
 }
 
+/// How a visitor to the corporate website reaches the business. One row, id
+/// "platform" (`~/server/contact-details.ts`), edited on the panel's Contact
+/// details page and read by the website through GET /api/contact.
+///
+/// A row rather than a constant in the website's code so the business can
+/// change its own number without a release. Each detail is nullable: null
+/// means "not given yet", and the website decides what to show in its place.
+model ContactDetails {
+    id String @id
+
+    /// As it should be read, e.g. "01 234 5678". The website derives the
+    /// dialable form itself.
+    salesPhone String?
+
+    updatedAt DateTime @updatedAt
+    /// The admin's email, as on an AuditEvent.
+    updatedBy String?
+}
+
 enum AuditEventType {
     license_created
     license_updated
@@ -559,6 +578,7 @@ enum AuditEventType {
     hardware_item_created
     hardware_item_updated
     hardware_item_deleted
+    contact_details_updated
 }
 
 /// Append-only feed. Nothing in the app updates or deletes these rows.
