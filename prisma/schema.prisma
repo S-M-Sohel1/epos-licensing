@@ -276,6 +276,12 @@ model QuoteRequest {
     /// What the calculator had selected, as {optionId: quantity}.
     selection Json?
 
+    /// When an admin marked this request as followed up, and which admin
+    /// (their email). Null until then, which is what the Quote requests page
+    /// counts as "not contacted yet".
+    contactedAt DateTime?
+    contactedBy String?
+
     createdAt DateTime @default(now())
 
     @@index([shopId])

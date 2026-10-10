@@ -17,6 +17,7 @@ export function SidebarNav({ pendingCount }: { pendingCount: number }) {
     { href: "/", label: "Approvals", count: pendingCount },
     { href: "/licenses", label: "Licenses" },
     { href: "/shops", label: "Customers" },
+    { href: "/quotes", label: "Quote requests" },
     { href: "/releases", label: "Releases" },
     { href: "/pricing", label: "Pricing" },
     { href: "/audit", label: "Audit log" },
