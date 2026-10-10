@@ -32,3 +32,21 @@ export async function latestLicenseSummary(
     approvedDeviceCount: license.devices.length,
   };
 }
+
+/**
+ * When this account last asked us for something: a quote on the website, or a
+ * licence from its dashboard. Both are a QuoteRequest. The dashboard of an
+ * account with no licence shows it as "requested on ...", so an owner who has
+ * already asked is told so instead of being offered the same form again.
+ */
+export async function lastRequestAt(shopIds: string[]): Promise<Date | null> {
+  if (shopIds.length === 0) return null;
+
+  const latest = await db.quoteRequest.findFirst({
+    where: { shopId: { in: shopIds } },
+    orderBy: { createdAt: "desc" },
+    select: { createdAt: true },
+  });
+
+  return latest?.createdAt ?? null;
+}
