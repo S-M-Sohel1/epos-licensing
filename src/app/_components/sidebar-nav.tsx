@@ -20,6 +20,7 @@ export function SidebarNav({ pendingCount }: { pendingCount: number }) {
     { href: "/quotes", label: "Quote requests" },
     { href: "/releases", label: "Releases" },
     { href: "/pricing", label: "Pricing" },
+    { href: "/contact", label: "Contact details" },
     { href: "/audit", label: "Audit log" },
     { href: "/admins", label: "Administrators" },
   ];
