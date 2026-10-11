@@ -5,7 +5,8 @@ import { z } from "zod";
 
 import { AuditEventType, TemplateId } from "generated/prisma";
 import { db } from "~/server/db";
-import { TEMPLATE_LABELS } from "~/server/shop-connection";
+import { STOREFRONT_DOMAIN, TEMPLATE_LABELS } from "~/server/shop-connection";
+import { changeSubdomain, removeSubdomain, setShopPublished } from "~/server/shops";
 import { refreshShopOnWebsite, type WebRefresh } from "~/server/web-platform";
 
 import { formValue, redirectWithNotice, requireAdmin } from "./shared";
@@ -136,6 +137,93 @@ export async function setShopTemplateAction(formData: FormData): Promise<void> {
     `${shop.name} now uses ${TEMPLATE_LABELS[shop.templateId].name}. ${websiteNotice(refresh)}`.trim(),
     refresh === null || refresh === "refreshed" ? "success" : "error",
   );
+}
+
+/**
+ * Moves a shop's website to a different subdomain (see `changeSubdomain`). The website is told
+ * to forget both names: the old one, or it would go on answering there for up to 30 days, and
+ * the new one, in case someone visited it while it was nobody's.
+ */
+export async function changeSubdomainAction(formData: FormData): Promise<void> {
+  const admin = await requireAdmin();
+  const id = formValue(formData, "id");
+  const customerId = formValue(formData, "customerId");
+  const shopPath = `/shops/${customerId}/shop/${id}`;
+
+  await requireShopOf(id, customerId);
+  const result = await changeSubdomain(id, formData.get("subdomain"), { admin });
+  if (!result.ok) redirectWithNotice(`${shopPath}#address`, result.error);
+
+  const refresh = worst(await refreshShopOnWebsite(result.previous), await refreshShopOnWebsite(result.subdomain));
+
+  revalidatePath(shopPath);
+  revalidatePath("/shops");
+  redirectWithNotice(
+    shopPath,
+    `The website is now at ${result.subdomain}.${STOREFRONT_DOMAIN}. ${result.previous}.${STOREFRONT_DOMAIN} has stopped working. ${websiteNotice(refresh)}`.trim(),
+    refresh === "refreshed" ? "success" : "error",
+  );
+}
+
+/** Takes a shop's website offline or puts it back (see `setShopPublished`). */
+export async function setShopPublishedAction(formData: FormData): Promise<void> {
+  const admin = await requireAdmin();
+  const id = formValue(formData, "id");
+  const customerId = formValue(formData, "customerId");
+  const shopPath = `/shops/${customerId}/shop/${id}`;
+  const published = formValue(formData, "published") === "true";
+
+  await requireShopOf(id, customerId);
+  const result = await setShopPublished(id, published, { admin });
+  if (!result.ok) redirectWithNotice(`${shopPath}#address`, result.error);
+
+  const refresh = await refreshShopOnWebsite(result.subdomain);
+
+  revalidatePath(shopPath);
+  revalidatePath("/shops");
+  redirectWithNotice(
+    shopPath,
+    `${published ? "The website is back online." : "The website is offline."} ${websiteNotice(refresh)}`.trim(),
+    refresh === "refreshed" ? "success" : "error",
+  );
+}
+
+/** Takes a shop's subdomain away (see `removeSubdomain`). The form carries a tick box, checked here too. */
+export async function removeSubdomainAction(formData: FormData): Promise<void> {
+  const admin = await requireAdmin();
+  const id = formValue(formData, "id");
+  const customerId = formValue(formData, "customerId");
+  const shopPath = `/shops/${customerId}/shop/${id}`;
+
+  if (formValue(formData, "sure") !== "on") {
+    redirectWithNotice(`${shopPath}#address`, "Tick the box to confirm, then remove the address.");
+  }
+
+  await requireShopOf(id, customerId);
+  const result = await removeSubdomain(id, { admin });
+  if (!result.ok) redirectWithNotice(`${shopPath}#address`, result.error);
+
+  const refresh = await refreshShopOnWebsite(result.previous);
+
+  revalidatePath(shopPath);
+  revalidatePath("/shops");
+  redirectWithNotice(
+    shopPath,
+    `${result.previous}.${STOREFRONT_DOMAIN} has been removed from this shop. ${websiteNotice(refresh)}`.trim(),
+    refresh === "refreshed" ? "success" : "error",
+  );
+}
+
+/** The shop named in a form has to be this customer's: the page it came from is under that customer. */
+async function requireShopOf(id: string, customerId: string): Promise<void> {
+  const shop = await db.shop.findUnique({ where: { id }, select: { customerId: true } });
+  if (shop?.customerId !== customerId) redirectWithNotice("/shops", "That shop no longer exists.");
+}
+
+/** Of two answers from the website, the one the admin most needs to hear about. */
+function worst(a: WebRefresh, b: WebRefresh): WebRefresh {
+  if (a === "not_configured" || b === "not_configured") return "not_configured";
+  return a === "failed" || b === "failed" ? "failed" : "refreshed";
 }
 
 /** What the admin is told about the shop's website after a change to the Shop row. */
