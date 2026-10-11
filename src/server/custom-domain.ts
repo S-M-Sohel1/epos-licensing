@@ -1,4 +1,4 @@
-import { resolve4 } from "node:dns/promises";
+import { Resolver } from "node:dns/promises";
 
 import { z } from "zod";
 
@@ -87,55 +87,112 @@ export async function setCustomDomain(shopId: string, input: unknown, admin: str
   return { ok: true, domain, previous };
 }
 
-export type CustomDomainStatus =
-  /** The domain reaches the web platform and shows this shop. */
-  | "live"
-  /** It reaches the web platform, which does not show this shop there (yet: it can take two minutes after saving). */
-  | "not_this_shop"
-  /** Nothing of ours answers there: the DNS is not pointed yet, or the certificate is still being got. */
-  | "not_reachable";
+/** What an owner's record points at. */
+const TARGET = CUSTOM_DOMAIN_TARGET;
+
+/** One DNS record for the owner to add, and whether it is there yet. */
+export interface DnsRecord {
+  type: "CNAME" | "A";
+  /** As a DNS provider's form wants it: the part before the owner's domain, or "@" for the domain itself. */
+  name: string;
+  /** The whole name, for anyone unsure what `name` is short for. */
+  host: string;
+  value: string;
+  /**
+   * `valid`: the name leads to our server. `missing`: the name does not exist. `elsewhere`: it
+   * exists and leads somewhere else, named in `found`. `unknown`: it could not be checked.
+   */
+  state: "valid" | "missing" | "elsewhere" | "unknown";
+  found: string | null;
+}
+
+export interface DomainSetup {
+  /**
+   * `live`: the domain shows this shop. `starting`: the record is right and the website is not
+   * answering there yet, which is the minute or two it takes to notice the domain and get its
+   * certificate. `waiting`: the record is not right yet.
+   */
+  status: "live" | "starting" | "waiting";
+  /** The one record that makes the domain work. */
+  record: DnsRecord;
+  /**
+   * The same domain with or without "www.", which is sent on to the saved one if the owner
+   * points it here too. Worth having, never needed. Null for a name further down a domain
+   * (`order.royalkebab.ie`), where nobody types a "www." in front.
+   */
+  optional: DnsRecord | null;
+}
+
+// Short waits: this runs while a page is being built.
+const dns = new Resolver({ timeout: 3000, tries: 2 });
 
 /**
- * Looks at the domain from outside, the way a visitor's browser would. The web platform marks
- * every page it serves on a shop's own domain with that shop's subdomain (`x-epos-shop`), so
- * this cannot be fooled by a parking page or another host answering there.
+ * The domain a name is managed under: `nanitex.com` for `test.nanitex.com`, `royalkebab.co.uk`
+ * for itself. Found by asking which of the name and its parents has name servers of its own,
+ * which needs no list of what counts as a domain ending. Falls back to the last two labels.
  */
-export async function customDomainStatus(domain: string, subdomain: string | null): Promise<CustomDomainStatus> {
+async function zoneOf(host: string): Promise<string> {
+  const labels = host.split(".");
+  for (let i = 0; i < labels.length - 1; i++) {
+    const candidate = labels.slice(i).join(".");
+    const found = await dns.resolveNs(candidate).then((servers) => servers.length > 0, () => false);
+    if (found) return candidate;
+  }
+  return labels.slice(-2).join(".");
+}
+
+/**
+ * The record that points `host` at us, and whether it is in place. The domain itself (the top
+ * of its zone) cannot be a CNAME at most providers, so it is an A record to the server's
+ * address; any name under it is a CNAME to ours, which follows the server if it ever moves.
+ *
+ * "In place" is judged by where the name leads, not by the record's type: an owner whose
+ * provider flattens a CNAME, or who used an A record under a domain, has done it right.
+ */
+async function recordFor(host: string, zone: string, serverAddress: string | null): Promise<DnsRecord> {
+  const top = host === zone;
+  const base = {
+    type: top ? ("A" as const) : ("CNAME" as const),
+    name: top ? "@" : host.slice(0, -(zone.length + 1)),
+    host,
+    value: top ? (serverAddress ?? "") : TARGET,
+  };
+  if (!serverAddress) return { ...base, state: "unknown", found: null };
+
   try {
-    const response = await fetch(`https://${domain}/`, {
-      method: "HEAD",
-      redirect: "manual",
-      cache: "no-store",
-      signal: AbortSignal.timeout(6000),
-    });
-    const shown = response.headers.get("x-epos-shop");
-    if (!shown) return "not_reachable";
-    return shown === subdomain ? "live" : "not_this_shop";
-  } catch {
-    return "not_reachable";
+    const addresses = await dns.resolve4(host);
+    if (addresses.includes(serverAddress)) return { ...base, state: "valid", found: null };
+    return { ...base, state: "elsewhere", found: addresses[0] ?? null };
+  } catch (error) {
+    const code = (error as { code?: string }).code;
+    return { ...base, state: code === "ENOTFOUND" || code === "ENODATA" ? "missing" : "unknown", found: null };
   }
 }
 
-/** The DNS records an owner adds for a domain, in the words their DNS provider uses. */
-export interface DnsRecord {
-  type: "CNAME" | "A";
-  name: string;
-  value: string;
-}
-
 /**
- * What to ask the owner to add. `www.x.ie` (or any other name under a domain) is a CNAME to
- * ours; the bare `x.ie` cannot be a CNAME at most providers, so it is an A record to the
- * server's address, read from our own DNS so that it is written down in one place only.
+ * Everything the owner's side of a domain comes to: the record to add, whether it is there,
+ * and whether the domain shows the shop yet.
  *
- * Which names are "bare" cannot be told from the text (`x.co.uk` is, `order.x.ie` is not), so
- * a domain saved with "www." gets both records and anything else gets the A record, with the
- * CNAME offered as the alternative for a name under a domain.
+ * "Shows the shop" is looked at from outside, the way a visitor's browser would. The web
+ * platform marks every page it serves on a shop's own domain with that shop's subdomain
+ * (`x-epos-shop`), so a parking page or another host answering there is not taken for ours.
  */
-export async function dnsRecordsFor(domain: string): Promise<{ records: DnsRecord[]; serverAddress: string | null }> {
-  const serverAddress = await resolve4(CUSTOM_DOMAIN_TARGET).then((found) => found[0] ?? null, () => null);
-  const bare = domain.startsWith("www.") ? domain.slice(4) : domain;
-  const records: DnsRecord[] = [{ type: "CNAME", name: `www.${bare}`, value: CUSTOM_DOMAIN_TARGET }];
-  if (serverAddress) records.push({ type: "A", name: bare, value: serverAddress });
-  return { records, serverAddress };
+export async function domainSetup(domain: string, subdomain: string | null): Promise<DomainSetup> {
+  const other = domain.startsWith("www.") ? domain.slice(4) : `www.${domain}`;
+  const [serverAddress, zone, shown] = await Promise.all([
+    dns.resolve4(TARGET).then((found) => found[0] ?? null, () => null),
+    zoneOf(domain),
+    fetch(`https://${domain}/`, { method: "HEAD", redirect: "manual", cache: "no-store", signal: AbortSignal.timeout(6000) }).then(
+      (response) => response.headers.get("x-epos-shop"),
+      () => null,
+    ),
+  ]);
+  const paired = domain === zone || domain === `www.${zone}`;
+  const [record, optional] = await Promise.all([
+    recordFor(domain, zone, serverAddress),
+    paired ? recordFor(other, zone, serverAddress) : null,
+  ]);
+
+  const live = shown !== null && shown === subdomain;
+  return { status: live ? "live" : record.state === "valid" ? "starting" : "waiting", record, optional };
 }

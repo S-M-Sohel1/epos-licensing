@@ -11,7 +11,7 @@ import {
   setShopTemplateAction,
   updateShopAction,
 } from "~/server/actions/shops";
-import { CUSTOM_DOMAIN_TARGET, customDomainStatus, dnsRecordsFor, type CustomDomainStatus } from "~/server/custom-domain";
+import { domainSetup, type DnsRecord, type DomainSetup } from "~/server/custom-domain";
 import { db } from "~/server/db";
 import { getShopConnection, STOREFRONT_DOMAIN, TEMPLATE_LABELS, type WebsiteState } from "~/server/shop-connection";
 
@@ -23,19 +23,72 @@ const WEBSITE_STATE: Record<WebsiteState, { text: string; mark: string }> = {
   none: { text: "No website yet", mark: "none" },
 };
 
-const DOMAIN_STATE: Record<CustomDomainStatus, { text: string; mark: string; more: string }> = {
+const DOMAIN_STATE: Record<DomainSetup["status"], { text: string; mark: string; more: string }> = {
   live: { text: "Working", mark: "approved", more: "The domain shows this shop's website." },
-  not_this_shop: {
-    text: "Not showing this shop yet",
+  starting: {
+    text: "Record found, starting up",
     mark: "pending",
-    more: "The domain reaches our server, which is not showing this shop there. If it was saved in the last two minutes, look again shortly.",
+    more: "The DNS record is right. The website takes a minute or two to notice a new domain and get its certificate: reload this page shortly.",
   },
-  not_reachable: {
-    text: "Not pointed at us yet",
+  waiting: {
+    text: "Waiting for the DNS record",
     mark: "pending",
-    more: "Nothing of ours answers at the domain. The owner has to add the records below where the domain's DNS is managed; after that it can take from a few minutes to a few hours.",
+    more: "The owner adds the record below where the domain's DNS is managed. After that it can take from a few minutes to a few hours to show here.",
   },
 };
+
+const RECORD_STATE: Record<DnsRecord["state"], { text: string; mark: string }> = {
+  valid: { text: "Valid", mark: "approved" },
+  missing: { text: "Not found", mark: "blocked" },
+  elsewhere: { text: "Points somewhere else", mark: "blocked" },
+  unknown: { text: "Could not be checked", mark: "none" },
+};
+
+function RecordRow({ record }: { record: DnsRecord }) {
+  const state = RECORD_STATE[record.state];
+  return (
+    <tr>
+      <td>{record.type}</td>
+      <td className="vbg-mono">
+        {record.name}
+        {record.name !== record.host && <span className="vbg-visually-hidden"> ({record.host})</span>}
+      </td>
+      <td className="vbg-mono">{record.value || "the server's address"}</td>
+      <td>
+        <span className="vbg-custom-status" data-state={state.mark}>
+          {state.text}
+        </span>
+        {record.state === "elsewhere" && record.found && (
+          <>
+            <br />
+            <span className="vbg-meta">now {record.found}</span>
+          </>
+        )}
+      </td>
+    </tr>
+  );
+}
+
+function RecordTable({ caption, record }: { caption: string; record: DnsRecord }) {
+  return (
+    <div className="vbg-table-wrap" style={{ marginTop: "var(--vbg-space-4)" }}>
+      <table>
+        <caption className="vbg-visually-hidden">{caption}</caption>
+        <thead>
+          <tr>
+            <th scope="col">Type</th>
+            <th scope="col">Name</th>
+            <th scope="col">Value</th>
+            <th scope="col">Check</th>
+          </tr>
+        </thead>
+        <tbody>
+          <RecordRow record={record} />
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 const LICENCE_STATE = {
   active: { text: "Active", mark: "approved" },
@@ -67,10 +120,8 @@ export default async function ShopPage({
   const { website, licences, menu, problems } = connection;
   const websiteState = WEBSITE_STATE[website.state];
 
-  const [domainStatus, dns] = shop.customDomain
-    ? await Promise.all([customDomainStatus(shop.customDomain, shop.subdomain), dnsRecordsFor(shop.customDomain)])
-    : [null, null];
-  const domainState = domainStatus ? DOMAIN_STATE[domainStatus] : null;
+  const setup = shop.customDomain ? await domainSetup(shop.customDomain, shop.subdomain) : null;
+  const domainState = setup ? DOMAIN_STATE[setup.status] : null;
 
   return (
     <>
@@ -319,7 +370,7 @@ export default async function ShopPage({
             </div>
           </form>
 
-          {shop.customDomain && domainState && dns && (
+          {setup && domainState && (
             <div className="vbg-span-7" style={{ marginTop: "var(--vbg-space-8)" }}>
               <p className="vbg-reading">
                 <span className="vbg-custom-status" data-state={domainState.mark}>
@@ -328,33 +379,30 @@ export default async function ShopPage({
                 <br />
                 {domainState.more}
               </p>
-              <div className="vbg-table-wrap" style={{ marginTop: "var(--vbg-space-5)" }}>
-              <table>
-                <caption className="vbg-visually-hidden">DNS records for the owner to add</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Type</th>
-                    <th scope="col">Name</th>
-                    <th scope="col">Value</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {dns.records.map((record) => (
-                    <tr key={record.name}>
-                      <td>{record.type}</td>
-                      <td className="vbg-mono">{record.name}</td>
-                      <td className="vbg-mono">{record.value}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              </div>
+
+              <h3 className="vbg-label" style={{ marginTop: "var(--vbg-space-6)" }}>
+                The record the owner adds
+              </h3>
+              <RecordTable caption="The DNS record that makes the domain work" record={setup.record} />
               <p className="vbg-helper">
-                {dns.serverAddress
-                  ? `A domain that is itself under another (order.royalkebab.ie) takes a CNAME to ${CUSTOM_DOMAIN_TARGET} in place of the A record. `
-                  : `The server's address could not be looked up just now, so the A record for the domain without "www." is missing from this list. Reload the page. `}
-                If the domain is on Cloudflare, the records must be set to &ldquo;DNS only&rdquo;.
+                For {setup.record.host}.
+                {setup.record.state === "elsewhere"
+                  ? " The name exists but leads somewhere else. If the domain is on Cloudflare, its record has to be set to “DNS only” (grey cloud)."
+                  : " If the domain is on Cloudflare, the record has to be set to “DNS only” (grey cloud)."}
               </p>
+
+              {setup.optional && (
+                <>
+                  <h3 className="vbg-label" style={{ marginTop: "var(--vbg-space-6)" }}>
+                    Optional
+                  </h3>
+                  <p className="vbg-reading">
+                    So that {setup.optional.host} also arrives at {setup.record.host}. The domain
+                    works without it.
+                  </p>
+                  <RecordTable caption="An optional second DNS record" record={setup.optional} />
+                </>
+              )}
             </div>
           )}
         </section>
