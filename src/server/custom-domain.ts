@@ -1,4 +1,5 @@
 import { Resolver } from "node:dns/promises";
+import { request } from "node:https";
 
 import { z } from "zod";
 
@@ -165,7 +166,12 @@ async function zoneOf(host: string): Promise<string> {
  * "In place" is judged by where the name leads, not by the record's type: an owner whose
  * provider flattens a CNAME, or who used an A record under a domain, has done it right.
  */
-async function recordFor(host: string, zone: string, serverAddress: string | null): Promise<DnsRecord> {
+async function recordFor(
+  host: string,
+  zone: string,
+  serverAddress: string | null,
+  zoneServers: Resolver | null,
+): Promise<DnsRecord> {
   const top = host === zone;
   const base = {
     type: top ? ("A" as const) : ("CNAME" as const),
@@ -176,7 +182,7 @@ async function recordFor(host: string, zone: string, serverAddress: string | nul
   if (!serverAddress) return { ...base, state: "unknown", found: null };
 
   try {
-    const addresses = await dns.resolve4(host);
+    const addresses = await addressesOf(host, zoneServers);
     if (addresses.includes(serverAddress)) return { ...base, state: "valid", found: null };
     const found = addresses[0] ?? null;
     return { ...base, state: found && isCloudflare(found) ? "proxied" : "elsewhere", found };
@@ -184,6 +190,67 @@ async function recordFor(host: string, zone: string, serverAddress: string | nul
     const code = (error as { code?: string }).code;
     return { ...base, state: code === "ENOTFOUND" || code === "ENODATA" ? "missing" : "unknown", found: null };
   }
+}
+
+/**
+ * A resolver that asks the zone's own name servers, or null if they cannot be found.
+ *
+ * The ordinary resolver remembers a "no such name" for as long as the zone says, half an hour
+ * at Cloudflare. This page asks about a name before its record exists, so the ordinary
+ * resolver would then go on saying "not found" long after the owner had added it, and "Check
+ * again" would be a lie. The zone's own servers remember nothing: they are where the record is.
+ */
+async function serversOf(zone: string): Promise<Resolver | null> {
+  const names = await dns.resolveNs(zone).catch(() => [] as string[]);
+  const found = await Promise.all(names.slice(0, 2).map((name) => dns.resolve4(name).catch(() => [] as string[])));
+  const addresses = found.flat();
+  if (addresses.length === 0) return null;
+  const servers = new Resolver({ timeout: 3000, tries: 2 });
+  servers.setServers(addresses);
+  return servers;
+}
+
+/**
+ * Where a name leads. Throws as `resolve4` does for a name that does not exist.
+ *
+ * A zone's own server answers for its own names only. So a CNAME is read from it, and the name
+ * it points at (ours, in the right case) is then looked up the ordinary way.
+ */
+async function addressesOf(host: string, zoneServers: Resolver | null): Promise<string[]> {
+  if (!zoneServers) return dns.resolve4(host);
+  const alias = await zoneServers.resolveCname(host).then(
+    (names) => names[0] ?? null,
+    (error: { code?: string }) => {
+      if (error.code === "ENODATA") return null;
+      throw error;
+    },
+  );
+  return alias ? dns.resolve4(alias) : zoneServers.resolve4(host);
+}
+
+/**
+ * Which shop our server shows for a domain, or null: a request to the server's own address
+ * that names the domain, so it does not depend on any resolver having caught up. The
+ * certificate is checked against the domain, so "shows the shop" means over a working https.
+ *
+ * Only to be asked once the domain's record is right. The server gets a certificate the first
+ * time a saved domain is asked for, and asking on behalf of a domain that does not lead to it
+ * yet would have it try, fail, and use up the few attempts the certificate authority allows.
+ */
+function shopShownAt(domain: string, serverAddress: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const call = request(
+      { host: serverAddress, servername: domain, method: "HEAD", path: "/", headers: { host: domain }, timeout: 8000 },
+      (response) => {
+        response.resume();
+        const shown = response.headers["x-epos-shop"];
+        resolve(typeof shown === "string" ? shown : null);
+      },
+    );
+    call.on("timeout", () => call.destroy());
+    call.on("error", () => resolve(null));
+    call.end();
+  });
 }
 
 /** Cloudflare's published IPv4 ranges (https://www.cloudflare.com/ips/), as [first address, prefix length]. */
@@ -209,25 +276,22 @@ function isCloudflare(address: string): boolean {
  * Everything the owner's side of a domain comes to: the record to add, whether it is there,
  * and whether the domain shows the shop yet.
  *
- * "Shows the shop" is looked at from outside, the way a visitor's browser would. The web
- * platform marks every page it serves on a shop's own domain with that shop's subdomain
- * (`x-epos-shop`), so a parking page or another host answering there is not taken for ours.
+ * "Shows the shop" is asked of the server itself (`shopShownAt`). The web platform marks every
+ * page it serves on a shop's own domain with that shop's subdomain (`x-epos-shop`).
  */
 export async function domainSetup(domain: string, subdomain: string | null): Promise<DomainSetup> {
   const other = domain.startsWith("www.") ? domain.slice(4) : `www.${domain}`;
-  const [serverAddress, zone, shown] = await Promise.all([
+  const [serverAddress, zone] = await Promise.all([
     dns.resolve4(TARGET).then((found) => found[0] ?? null, () => null),
     zoneOf(domain),
-    fetch(`https://${domain}/`, { method: "HEAD", redirect: "manual", cache: "no-store", signal: AbortSignal.timeout(6000) }).then(
-      (response) => response.headers.get("x-epos-shop"),
-      () => null,
-    ),
   ]);
+  const zoneServers = await serversOf(zone);
   const [record, optional] = await Promise.all([
-    recordFor(domain, zone, serverAddress),
-    recordFor(other, zone, serverAddress),
+    recordFor(domain, zone, serverAddress, zoneServers),
+    recordFor(other, zone, serverAddress, zoneServers),
   ]);
 
+  const shown = serverAddress && record.state === "valid" ? await shopShownAt(domain, serverAddress) : null;
   const live = shown !== null && shown === subdomain;
   return { status: live ? "live" : record.state === "valid" ? "starting" : "waiting", record, optional };
 }
