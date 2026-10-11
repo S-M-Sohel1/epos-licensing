@@ -20,11 +20,16 @@ export const STOREFRONT_DOMAIN = "epos-365.com";
 
 type WebsiteFields = { subdomain: string | null; customDomain: string | null; isPublished: boolean };
 
-/** "royalkebab.epos-365.com", the shop's own domain when it has one, or null with neither. */
+/**
+ * "royalkebab.epos-365.com", or null for a shop with no website.
+ *
+ * The subdomain's address even when the shop has a domain of its own: this is what a till is
+ * told and what an admin clicks, and the subdomain works from the moment it is activated,
+ * where a shop's own domain works only once its owner has pointed it at the server. A shop
+ * with a domain and no subdomain has no website (see custom-domain.ts).
+ */
 export function websiteAddress(shop: WebsiteFields): string | null {
-  if (shop.customDomain) return shop.customDomain;
-  if (shop.subdomain) return `${shop.subdomain}.${STOREFRONT_DOMAIN}`;
-  return null;
+  return shop.subdomain ? `${shop.subdomain}.${STOREFRONT_DOMAIN}` : null;
 }
 
 /**

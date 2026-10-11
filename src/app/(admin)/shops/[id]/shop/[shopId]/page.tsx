@@ -6,10 +6,12 @@ import { describeExpiry, formatDate, formatDateTime } from "~/app/_lib/format";
 import {
   changeSubdomainAction,
   removeSubdomainAction,
+  setCustomDomainAction,
   setShopPublishedAction,
   setShopTemplateAction,
   updateShopAction,
 } from "~/server/actions/shops";
+import { CUSTOM_DOMAIN_TARGET, customDomainStatus, dnsRecordsFor, type CustomDomainStatus } from "~/server/custom-domain";
 import { db } from "~/server/db";
 import { getShopConnection, STOREFRONT_DOMAIN, TEMPLATE_LABELS, type WebsiteState } from "~/server/shop-connection";
 
@@ -19,6 +21,20 @@ const WEBSITE_STATE: Record<WebsiteState, { text: string; mark: string }> = {
   published: { text: "Online", mark: "approved" },
   not_published: { text: "Offline", mark: "pending" },
   none: { text: "No website yet", mark: "none" },
+};
+
+const DOMAIN_STATE: Record<CustomDomainStatus, { text: string; mark: string; more: string }> = {
+  live: { text: "Working", mark: "approved", more: "The domain shows this shop's website." },
+  not_this_shop: {
+    text: "Not showing this shop yet",
+    mark: "pending",
+    more: "The domain reaches our server, which is not showing this shop there. If it was saved in the last two minutes, look again shortly.",
+  },
+  not_reachable: {
+    text: "Not pointed at us yet",
+    mark: "pending",
+    more: "Nothing of ours answers at the domain. The owner has to add the records below where the domain's DNS is managed; after that it can take from a few minutes to a few hours.",
+  },
 };
 
 const LICENCE_STATE = {
@@ -51,6 +67,11 @@ export default async function ShopPage({
   const { website, licences, menu, problems } = connection;
   const websiteState = WEBSITE_STATE[website.state];
 
+  const [domainStatus, dns] = shop.customDomain
+    ? await Promise.all([customDomainStatus(shop.customDomain, shop.subdomain), dnsRecordsFor(shop.customDomain)])
+    : [null, null];
+  const domainState = domainStatus ? DOMAIN_STATE[domainStatus] : null;
+
   return (
     <>
       <section className="vbg-section">
@@ -77,6 +98,19 @@ export default async function ShopPage({
               <span className="vbg-custom-status" data-state={websiteState.mark}>
                 {websiteState.text}
               </span>
+              {shop.customDomain && domainState && (
+                <>
+                  <br />
+                  <a href={`https://${shop.customDomain}`} target="_blank" rel="noreferrer">
+                    {shop.customDomain}
+                    <span className="vbg-visually-hidden"> (opens in a new tab)</span>
+                  </a>
+                  <br />
+                  <span className="vbg-custom-status" data-state={domainState.mark}>
+                    {domainState.text}
+                  </span>
+                </>
+              )}
             </dd>
           </div>
 
@@ -242,6 +276,87 @@ export default async function ShopPage({
               </button>
             </div>
           </form>
+        </section>
+      )}
+
+      {shop.subdomain && (
+        <section className="vbg-section" id="domain">
+          <h2 className="vbg-heading-24">Own domain</h2>
+          <p className="vbg-reading vbg-span-7">
+            A domain the shop owns, such as www.royalkebab.ie, shown as well as its{" "}
+            {STOREFRONT_DOMAIN} address, which keeps working. Saving it here does nothing until the
+            owner points the domain at us, and pointing a domain at us does nothing until it is
+            saved here. Emails to customers and staff go on using the {STOREFRONT_DOMAIN} address.
+          </p>
+
+          <form action={setCustomDomainAction} className="vbg-span-7">
+            <input type="hidden" name="id" value={shop.id} />
+            <input type="hidden" name="customerId" value={id} />
+            <div className="vbg-field">
+              <label className="vbg-label" htmlFor="customDomain">
+                Domain
+              </label>
+              <input
+                id="customDomain"
+                name="customDomain"
+                type="text"
+                defaultValue={shop.customDomain ?? ""}
+                placeholder="www.royalkebab.ie"
+                maxLength={253}
+                autoCapitalize="none"
+                spellCheck={false}
+                aria-describedby="customDomain-help"
+              />
+              <p id="customDomain-help" className="vbg-helper">
+                The address customers should see. With or without &ldquo;www.&rdquo;: the other
+                form is sent to this one. Leave it blank and save to take the domain away.
+              </p>
+            </div>
+            <div className="vbg-custom-actions" style={{ marginTop: "var(--vbg-space-5)" }}>
+              <button type="submit" className="vbg-button">
+                Save domain
+              </button>
+            </div>
+          </form>
+
+          {shop.customDomain && domainState && dns && (
+            <div className="vbg-span-7" style={{ marginTop: "var(--vbg-space-8)" }}>
+              <p className="vbg-reading">
+                <span className="vbg-custom-status" data-state={domainState.mark}>
+                  {domainState.text}
+                </span>
+                <br />
+                {domainState.more}
+              </p>
+              <div className="vbg-table-wrap" style={{ marginTop: "var(--vbg-space-5)" }}>
+              <table>
+                <caption className="vbg-visually-hidden">DNS records for the owner to add</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Type</th>
+                    <th scope="col">Name</th>
+                    <th scope="col">Value</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dns.records.map((record) => (
+                    <tr key={record.name}>
+                      <td>{record.type}</td>
+                      <td className="vbg-mono">{record.name}</td>
+                      <td className="vbg-mono">{record.value}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              </div>
+              <p className="vbg-helper">
+                {dns.serverAddress
+                  ? `A domain that is itself under another (order.royalkebab.ie) takes a CNAME to ${CUSTOM_DOMAIN_TARGET} in place of the A record. `
+                  : `The server's address could not be looked up just now, so the A record for the domain without "www." is missing from this list. Reload the page. `}
+                If the domain is on Cloudflare, the records must be set to &ldquo;DNS only&rdquo;.
+              </p>
+            </div>
+          )}
         </section>
       )}
 
