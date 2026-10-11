@@ -477,11 +477,13 @@
   gap: var(--vbg-space-3);
 }
 
-/* The DNS record: under the row, whatever its place in the markup. */
+/* The DNS record, and the optional second one: under the row, whatever their place in the
+ * markup. */
 .vbg-custom-domain-record {
   grid-column: 1 / -1;
   order: 1;
   border: 0;
+  margin: 0;
   padding: 0;
 }
 
