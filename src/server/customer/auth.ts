@@ -32,6 +32,8 @@ export interface CustomerShopSummary {
   id: string;
   name: string;
   subdomain: string | null;
+  /** The shop's own domain, if staff have saved one. Shown as well as the subdomain, never instead. */
+  customDomain: string | null;
   isPublished: boolean;
   templateId: TemplateId;
 }
@@ -58,6 +60,7 @@ function toShopSummary(shop: {
   id: string;
   name: string;
   subdomain: string | null;
+  customDomain: string | null;
   isPublished: boolean;
   templateId: TemplateId;
 }): CustomerShopSummary {
@@ -65,6 +68,7 @@ function toShopSummary(shop: {
     id: shop.id,
     name: shop.name,
     subdomain: shop.subdomain,
+    customDomain: shop.customDomain,
     isPublished: shop.isPublished,
     templateId: shop.templateId,
   };

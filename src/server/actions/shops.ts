@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { AuditEventType, TemplateId } from "generated/prisma";
 import { db } from "~/server/db";
+import { setCustomDomain } from "~/server/custom-domain";
 import { STOREFRONT_DOMAIN, TEMPLATE_LABELS } from "~/server/shop-connection";
 import { changeSubdomain, removeSubdomain, setShopPublished } from "~/server/shops";
 import { refreshShopOnWebsite, type WebRefresh } from "~/server/web-platform";
@@ -211,6 +212,32 @@ export async function removeSubdomainAction(formData: FormData): Promise<void> {
     shopPath,
     `${result.previous}.${STOREFRONT_DOMAIN} has been removed from this shop. ${websiteNotice(refresh)}`.trim(),
     refresh === "refreshed" ? "success" : "error",
+  );
+}
+
+/**
+ * Saves a shop's own domain, or with the field left blank takes it away (see custom-domain.ts).
+ * The website is not told: it looks a domain up afresh every minute or two.
+ */
+export async function setCustomDomainAction(formData: FormData): Promise<void> {
+  const admin = await requireAdmin();
+  const id = formValue(formData, "id");
+  const customerId = formValue(formData, "customerId");
+  const shopPath = `/shops/${customerId}/shop/${id}`;
+
+  await requireShopOf(id, customerId);
+  const result = await setCustomDomain(id, formValue(formData, "customDomain"), admin);
+  if (!result.ok) redirectWithNotice(`${shopPath}#domain`, result.error);
+
+  revalidatePath(shopPath);
+  redirectWithNotice(
+    `${shopPath}#domain`,
+    result.domain
+      ? `${result.domain} saved. It starts working once the owner has added the DNS records below; the website takes up to two minutes to notice a change made here.`
+      : result.previous
+        ? `${result.previous} removed. It stops showing this shop within two minutes.`
+        : "This shop has no domain of its own.",
+    "success",
   );
 }
 
