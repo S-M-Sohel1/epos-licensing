@@ -126,7 +126,8 @@ export interface DnsRecord {
 
 export interface DomainSetup {
   /**
-   * `live`: the domain shows this shop. `starting`: the record is right and the website is not
+   * `live`: the domain shows this shop, whether straight from our server or (the record's state
+   * being `proxied` or `elsewhere`) through a proxy in front of it. `starting`: the record is right and the website is not
    * answering there yet, which is the minute or two it takes to notice the domain and get its
    * certificate. `waiting`: the record is not right yet.
    */
@@ -253,6 +254,19 @@ function shopShownAt(domain: string, serverAddress: string): Promise<string | nu
   });
 }
 
+/** Which shop a domain shows when asked for the ordinary way, through whatever is in front of it. Null if none of ours. */
+function shopShownThroughProxy(domain: string): Promise<string | null> {
+  return fetch(`https://${domain}/`, {
+    method: "HEAD",
+    redirect: "manual",
+    cache: "no-store",
+    signal: AbortSignal.timeout(8000),
+  }).then(
+    (response) => response.headers.get("x-epos-shop"),
+    () => null,
+  );
+}
+
 /** Cloudflare's published IPv4 ranges (https://www.cloudflare.com/ips/), as [first address, prefix length]. */
 const CLOUDFLARE: [string, number][] = [
   ["173.245.48.0", 20], ["103.21.244.0", 22], ["103.22.200.0", 22], ["103.31.4.0", 22], ["141.101.64.0", 18],
@@ -291,7 +305,17 @@ export async function domainSetup(domain: string, subdomain: string | null): Pro
     recordFor(other, zone, serverAddress, zoneServers),
   ]);
 
-  const shown = serverAddress && record.state === "valid" ? await shopShownAt(domain, serverAddress) : null;
+  // Behind a proxy a domain can work all the same: the proxy fetches the pages from our server,
+  // which already has the certificate if the domain was set up before the proxy was switched
+  // on. Cloudflare's is the one that can be told by its addresses (`proxied`); any other looks
+  // like a domain that leads `elsewhere`. Either way it can only be seen by asking for the
+  // domain the way a visitor would.
+  const shown =
+    record.state === "proxied" || record.state === "elsewhere"
+      ? await shopShownThroughProxy(domain)
+      : serverAddress && record.state === "valid"
+        ? await shopShownAt(domain, serverAddress)
+        : null;
   const live = shown !== null && shown === subdomain;
   return { status: live ? "live" : record.state === "valid" ? "starting" : "waiting", record, optional };
 }

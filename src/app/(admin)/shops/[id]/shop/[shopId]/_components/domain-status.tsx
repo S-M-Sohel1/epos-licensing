@@ -30,6 +30,7 @@ const OPTIONAL: Record<DnsRecord["state"], { text: string; mark: string }> = {
 
 /** One word for the whole domain: how the website is doing if the record is right, the record's own state if not. */
 function overall(setup: DomainSetup) {
+  if (setup.status === "live") return STATUS.live;
   return STATUS[setup.record.state === "valid" ? setup.status : setup.record.state];
 }
 
@@ -125,9 +126,16 @@ export function DomainStatus({ shopId }: { shopId: string }) {
 
   const state = overall(setup);
   const right = setup.record.state === "valid";
-  const help = setup.status === "starting" && right
-    ? "The record is right. The website takes a minute or two to start answering on a new domain."
-    : HELP[setup.record.state];
+  const working = setup.status === "live";
+  // Working, but through a proxy (the name does not lead straight to us): said as a caution, as
+  // it is not a fault. Only Cloudflare's can be named; any other is just "a proxy".
+  const proxied = working && !right;
+  const cloudflare = setup.record.state === "proxied";
+  const help = working
+    ? undefined
+    : setup.status === "starting" && right
+      ? "The record is right. The website takes a minute or two to start answering on a new domain."
+      : HELP[setup.record.state];
 
   return (
     <>
@@ -139,7 +147,17 @@ export function DomainStatus({ shopId }: { shopId: string }) {
           Check again
         </button>
       </span>
-      <details className="vbg-custom-domain-record" open={!right}>
+      {proxied && (
+        <p className="vbg-custom-domain-record vbg-helper">
+          <span className="vbg-custom-status" data-state="pending">
+            Proxy detected
+          </span>{" "}
+          · The domain goes through {cloudflare ? "Cloudflare’s proxy" : "a proxy"} and is working.
+          The proxy can stop its security certificate renewing, so if the website stops loading
+          there, {cloudflare ? "set the record to “DNS only” (grey cloud)" : "point the record straight at us, as below"}.
+        </p>
+      )}
+      <details className="vbg-custom-domain-record" open={!working}>
         <summary>DNS record</summary>
         {help && <p className="vbg-helper">{help}</p>}
         <Record record={setup.record} />
