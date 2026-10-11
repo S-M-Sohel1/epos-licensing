@@ -5,11 +5,12 @@ import { z } from "zod";
 import { AuditEventType } from "generated/prisma";
 import { db } from "~/server/db";
 import { STOREFRONT_DOMAIN } from "~/server/shop-connection";
+import type { ShopActor } from "~/server/shops";
 
 /**
  * A shop's own domain (`www.royalkebab.ie`), beside the subdomain it always has.
  *
- * Staff save it here; nothing is registered anywhere else. The web platform's server answers
+ * The owner saves it from their dashboard, or staff here; nothing is registered anywhere else. The web platform's server answers
  * for any domain that is saved on a shop and pointed at it: it gets the certificate itself the
  * first time the domain is visited (Caddy, on demand), having asked the web platform whether
  * the domain is a shop's. So "saved here" plus "the owner's DNS points at the server" is the
@@ -44,10 +45,18 @@ export type SetCustomDomainResult =
   | { ok: true; domain: string | null; previous: string | null }
   | { ok: false; error: string };
 
-/** Saves a shop's own domain, or with a blank takes it away. Staff only. */
-export async function setCustomDomain(shopId: string, input: unknown, admin: string): Promise<SetCustomDomainResult> {
+/**
+ * Saves a shop's own domain, or with a blank takes it away. The owner (the shop has to be
+ * theirs) or staff.
+ *
+ * An owner needs no proof that the domain is theirs: saving it shows nothing anywhere until
+ * the domain's DNS points at our server, and only whoever controls the domain can do that.
+ * What saving does do is keep the name from every other shop, so a domain that is already
+ * saved elsewhere is refused and staff sort out whose it is.
+ */
+export async function setCustomDomain(shopId: string, input: unknown, by: ShopActor): Promise<SetCustomDomainResult> {
   const shop = await db.shop.findUnique({ where: { id: shopId } });
-  if (!shop) return { ok: false, error: "Shop not found." };
+  if (!shop || ("customerId" in by && shop.customerId !== by.customerId)) return { ok: false, error: "Shop not found." };
   const previous = shop.customDomain;
 
   let domain: string | null = null;
@@ -60,13 +69,19 @@ export async function setCustomDomain(shopId: string, input: unknown, admin: str
       return { ok: false, error: `That is one of our own addresses. To change the part before .${STOREFRONT_DOMAIN}, change the subdomain.` };
     }
     if (!shop.subdomain) {
-      return { ok: false, error: "This shop needs a subdomain first. The owner sets one up from their account." };
+      return { ok: false, error: "This shop needs a subdomain first." };
     }
     const clash = await db.shop.findFirst({
       where: { id: { not: shopId }, customDomain: { in: [domain, otherForm(domain)] } },
       select: { name: true },
     });
-    if (clash) return { ok: false, error: `That domain is already on another shop (${clash.name}).` };
+    if (clash) {
+      return {
+        ok: false,
+        // An owner is not told whose: that is another customer's business.
+        error: "admin" in by ? `That domain is already on another shop (${clash.name}).` : "That domain is already in use. Contact us if it is yours.",
+      };
+    }
   }
 
   if (domain === previous) return { ok: true, domain, previous };
@@ -76,7 +91,7 @@ export async function setCustomDomain(shopId: string, input: unknown, admin: str
     db.auditEvent.create({
       data: {
         type: AuditEventType.shop_updated,
-        actor: admin,
+        actor: "admin" in by ? by.admin : "client",
         summary: domain
           ? `Own domain of ${shop.name} set to ${domain}${previous ? ` (was ${previous})` : ""}`
           : `Own domain ${previous} removed from ${shop.name}`,
@@ -99,10 +114,12 @@ export interface DnsRecord {
   host: string;
   value: string;
   /**
-   * `valid`: the name leads to our server. `missing`: the name does not exist. `elsewhere`: it
-   * exists and leads somewhere else, named in `found`. `unknown`: it could not be checked.
+   * `valid`: the name leads to our server. `missing`: the name does not exist. `proxied`: it
+   * leads to Cloudflare, which is what a record left on "Proxied" there looks like, and the
+   * commonest way to get this wrong. `elsewhere`: it leads somewhere else, named in `found`.
+   * `unknown`: it could not be checked.
    */
-  state: "valid" | "missing" | "elsewhere" | "unknown";
+  state: "valid" | "missing" | "proxied" | "elsewhere" | "unknown";
   found: string | null;
 }
 
@@ -162,11 +179,31 @@ async function recordFor(host: string, zone: string, serverAddress: string | nul
   try {
     const addresses = await dns.resolve4(host);
     if (addresses.includes(serverAddress)) return { ...base, state: "valid", found: null };
-    return { ...base, state: "elsewhere", found: addresses[0] ?? null };
+    const found = addresses[0] ?? null;
+    return { ...base, state: found && isCloudflare(found) ? "proxied" : "elsewhere", found };
   } catch (error) {
     const code = (error as { code?: string }).code;
     return { ...base, state: code === "ENOTFOUND" || code === "ENODATA" ? "missing" : "unknown", found: null };
   }
+}
+
+/** Cloudflare's published IPv4 ranges (https://www.cloudflare.com/ips/), as [first address, prefix length]. */
+const CLOUDFLARE: [string, number][] = [
+  ["173.245.48.0", 20], ["103.21.244.0", 22], ["103.22.200.0", 22], ["103.31.4.0", 22], ["141.101.64.0", 18],
+  ["108.162.192.0", 18], ["190.93.240.0", 20], ["188.114.96.0", 20], ["197.234.240.0", 22], ["198.41.128.0", 17],
+  ["162.158.0.0", 15], ["104.16.0.0", 13], ["104.24.0.0", 14], ["172.64.0.0", 13], ["131.0.72.0", 22],
+];
+
+function toNumber(address: string): number {
+  return address.split(".").reduce((sum, part) => sum * 256 + Number(part), 0);
+}
+
+function isCloudflare(address: string): boolean {
+  const value = toNumber(address);
+  return CLOUDFLARE.some(([first, bits]) => {
+    const size = 2 ** (32 - bits);
+    return Math.floor(value / size) === Math.floor(toNumber(first) / size);
+  });
 }
 
 /**

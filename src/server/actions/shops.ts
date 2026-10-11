@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { AuditEventType, TemplateId } from "generated/prisma";
 import { db } from "~/server/db";
-import { setCustomDomain } from "~/server/custom-domain";
+import { domainSetup, setCustomDomain, type DomainSetup } from "~/server/custom-domain";
 import { STOREFRONT_DOMAIN, TEMPLATE_LABELS } from "~/server/shop-connection";
 import { changeSubdomain, removeSubdomain, setShopPublished } from "~/server/shops";
 import { refreshShopOnWebsite, type WebRefresh } from "~/server/web-platform";
@@ -153,7 +153,7 @@ export async function changeSubdomainAction(formData: FormData): Promise<void> {
 
   await requireShopOf(id, customerId);
   const result = await changeSubdomain(id, formData.get("subdomain"), { admin });
-  if (!result.ok) redirectWithNotice(`${shopPath}#address`, result.error);
+  if (!result.ok) redirectWithNotice(`${shopPath}#domains`, result.error);
 
   const refresh = worst(await refreshShopOnWebsite(result.previous), await refreshShopOnWebsite(result.subdomain));
 
@@ -176,7 +176,7 @@ export async function setShopPublishedAction(formData: FormData): Promise<void> 
 
   await requireShopOf(id, customerId);
   const result = await setShopPublished(id, published, { admin });
-  if (!result.ok) redirectWithNotice(`${shopPath}#address`, result.error);
+  if (!result.ok) redirectWithNotice(`${shopPath}#domains`, result.error);
 
   const refresh = await refreshShopOnWebsite(result.subdomain);
 
@@ -197,12 +197,12 @@ export async function removeSubdomainAction(formData: FormData): Promise<void> {
   const shopPath = `/shops/${customerId}/shop/${id}`;
 
   if (formValue(formData, "sure") !== "on") {
-    redirectWithNotice(`${shopPath}#address`, "Tick the box to confirm, then remove the address.");
+    redirectWithNotice(`${shopPath}#domains`, "Tick the box to confirm, then remove the address.");
   }
 
   await requireShopOf(id, customerId);
   const result = await removeSubdomain(id, { admin });
-  if (!result.ok) redirectWithNotice(`${shopPath}#address`, result.error);
+  if (!result.ok) redirectWithNotice(`${shopPath}#domains`, result.error);
 
   const refresh = await refreshShopOnWebsite(result.previous);
 
@@ -226,19 +226,31 @@ export async function setCustomDomainAction(formData: FormData): Promise<void> {
   const shopPath = `/shops/${customerId}/shop/${id}`;
 
   await requireShopOf(id, customerId);
-  const result = await setCustomDomain(id, formValue(formData, "customDomain"), admin);
-  if (!result.ok) redirectWithNotice(`${shopPath}#domain`, result.error);
+  const result = await setCustomDomain(id, formValue(formData, "customDomain"), { admin });
+  if (!result.ok) redirectWithNotice(`${shopPath}#domains`, result.error);
 
   revalidatePath(shopPath);
   redirectWithNotice(
-    `${shopPath}#domain`,
+    `${shopPath}#domains`,
     result.domain
-      ? `${result.domain} saved. It starts working once the owner has added the DNS records below; the website takes up to two minutes to notice a change made here.`
+      ? `${result.domain} added. It starts working once its DNS record is in place.`
       : result.previous
         ? `${result.previous} removed. It stops showing this shop within two minutes.`
         : "This shop has no domain of its own.",
     "success",
   );
+}
+
+/**
+ * How a shop's own domain is doing: the record its owner adds and whether it is there. Called
+ * by the shop page after it has loaded, and again by its "Check again" button, because it
+ * looks the domain up in DNS and fetches it, which is seconds the page should not wait for.
+ * Null for a shop with no domain.
+ */
+export async function domainStatusAction(shopId: string): Promise<DomainSetup | null> {
+  await requireAdmin();
+  const shop = await db.shop.findUnique({ where: { id: shopId }, select: { customDomain: true, subdomain: true } });
+  return shop?.customDomain ? domainSetup(shop.customDomain, shop.subdomain) : null;
 }
 
 /** The shop named in a form has to be this customer's: the page it came from is under that customer. */

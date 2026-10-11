@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { DialogButton } from "~/app/_components/dialog-button";
 import { Notice, readNotice } from "~/app/_components/notice";
 import { describeExpiry, formatDate, formatDateTime } from "~/app/_lib/format";
 import {
@@ -11,8 +12,9 @@ import {
   setShopTemplateAction,
   updateShopAction,
 } from "~/server/actions/shops";
-import { domainSetup, type DnsRecord, type DomainSetup } from "~/server/custom-domain";
 import { db } from "~/server/db";
+
+import { DomainStatus } from "./_components/domain-status";
 import { getShopConnection, STOREFRONT_DOMAIN, TEMPLATE_LABELS, type WebsiteState } from "~/server/shop-connection";
 
 export const dynamic = "force-dynamic";
@@ -22,73 +24,6 @@ const WEBSITE_STATE: Record<WebsiteState, { text: string; mark: string }> = {
   not_published: { text: "Offline", mark: "pending" },
   none: { text: "No website yet", mark: "none" },
 };
-
-const DOMAIN_STATE: Record<DomainSetup["status"], { text: string; mark: string; more: string }> = {
-  live: { text: "Working", mark: "approved", more: "The domain shows this shop's website." },
-  starting: {
-    text: "Record found, starting up",
-    mark: "pending",
-    more: "The DNS record is right. The website takes a minute or two to notice a new domain and get its certificate: reload this page shortly.",
-  },
-  waiting: {
-    text: "Waiting for the DNS record",
-    mark: "pending",
-    more: "The owner adds the record below where the domain's DNS is managed. After that it can take from a few minutes to a few hours to show here.",
-  },
-};
-
-const RECORD_STATE: Record<DnsRecord["state"], { text: string; mark: string }> = {
-  valid: { text: "Valid", mark: "approved" },
-  missing: { text: "Not found", mark: "blocked" },
-  elsewhere: { text: "Points somewhere else", mark: "blocked" },
-  unknown: { text: "Could not be checked", mark: "none" },
-};
-
-function RecordRow({ record }: { record: DnsRecord }) {
-  const state = RECORD_STATE[record.state];
-  return (
-    <tr>
-      <td>{record.type}</td>
-      <td className="vbg-mono">
-        {record.name}
-        {record.name !== record.host && <span className="vbg-visually-hidden"> ({record.host})</span>}
-      </td>
-      <td className="vbg-mono">{record.value || "the server's address"}</td>
-      <td>
-        <span className="vbg-custom-status" data-state={state.mark}>
-          {state.text}
-        </span>
-        {record.state === "elsewhere" && record.found && (
-          <>
-            <br />
-            <span className="vbg-meta">now {record.found}</span>
-          </>
-        )}
-      </td>
-    </tr>
-  );
-}
-
-function RecordTable({ caption, record }: { caption: string; record: DnsRecord }) {
-  return (
-    <div className="vbg-table-wrap" style={{ marginTop: "var(--vbg-space-4)" }}>
-      <table>
-        <caption className="vbg-visually-hidden">{caption}</caption>
-        <thead>
-          <tr>
-            <th scope="col">Type</th>
-            <th scope="col">Name</th>
-            <th scope="col">Value</th>
-            <th scope="col">Check</th>
-          </tr>
-        </thead>
-        <tbody>
-          <RecordRow record={record} />
-        </tbody>
-      </table>
-    </div>
-  );
-}
 
 const LICENCE_STATE = {
   active: { text: "Active", mark: "approved" },
@@ -120,8 +55,6 @@ export default async function ShopPage({
   const { website, licences, menu, problems } = connection;
   const websiteState = WEBSITE_STATE[website.state];
 
-  const setup = shop.customDomain ? await domainSetup(shop.customDomain, shop.subdomain) : null;
-  const domainState = setup ? DOMAIN_STATE[setup.status] : null;
 
   return (
     <>
@@ -149,17 +82,13 @@ export default async function ShopPage({
               <span className="vbg-custom-status" data-state={websiteState.mark}>
                 {websiteState.text}
               </span>
-              {shop.customDomain && domainState && (
+              {shop.subdomain && shop.customDomain && (
                 <>
                   <br />
                   <a href={`https://${shop.customDomain}`} target="_blank" rel="noreferrer">
                     {shop.customDomain}
                     <span className="vbg-visually-hidden"> (opens in a new tab)</span>
                   </a>
-                  <br />
-                  <span className="vbg-custom-status" data-state={domainState.mark}>
-                    {domainState.text}
-                  </span>
                 </>
               )}
             </dd>
@@ -251,160 +180,168 @@ export default async function ShopPage({
       </section>
 
       {shop.subdomain && (
-        <section className="vbg-section" id="address">
-          <h2 className="vbg-heading-24">Website address</h2>
-          <p className="vbg-reading vbg-span-7">
-            The owner can change the address and take the website offline from their own account.
-            Only this page can remove the address. None of these delete anything: the menu, orders,
-            staff and photos belong to the shop, not to its address.
-          </p>
+        <section className="vbg-section" id="domains">
+          <div className="vbg-custom-domains-head vbg-span-7">
+            <h2 className="vbg-heading-24">Domains</h2>
+            {!shop.customDomain && (
+              <DialogButton label="Add domain" title="Add a domain">
+                <form action={setCustomDomainAction} className="vbg-custom-dialog-form">
+                  <input type="hidden" name="id" value={shop.id} />
+                  <input type="hidden" name="customerId" value={id} />
+                  <div className="vbg-field">
+                    <label className="vbg-label" htmlFor="customDomain">
+                      The shop&rsquo;s own domain
+                    </label>
+                    <input
+                      id="customDomain"
+                      name="customDomain"
+                      type="text"
+                      placeholder="www.royalkebab.ie"
+                      required
+                      maxLength={253}
+                      autoCapitalize="none"
+                      spellCheck={false}
+                      aria-describedby="customDomain-help"
+                    />
+                    <p id="customDomain-help" className="vbg-helper">
+                      The website shows there as well as at {shop.subdomain}.{STOREFRONT_DOMAIN}. You
+                      get the DNS record to add next.
+                    </p>
+                  </div>
+                  <button type="submit" className="vbg-button">
+                    Add domain
+                  </button>
+                </form>
+              </DialogButton>
+            )}
+          </div>
 
-          <form action={changeSubdomainAction} className="vbg-span-7">
-            <input type="hidden" name="id" value={shop.id} />
-            <input type="hidden" name="customerId" value={id} />
-            <div className="vbg-field">
-              <label className="vbg-label" htmlFor="subdomain">
-                Subdomain
-              </label>
-              <input
-                id="subdomain"
-                name="subdomain"
-                type="text"
-                defaultValue={shop.subdomain}
-                required
-                minLength={3}
-                maxLength={63}
-                pattern="[a-z0-9]+(-[a-z0-9]+)*"
-                autoCapitalize="none"
-                spellCheck={false}
-                aria-describedby="subdomain-help"
-              />
-              <p id="subdomain-help" className="vbg-helper">
-                The part before .{STOREFRONT_DOMAIN}. Lowercase letters, numbers and single hyphens.
-                The old address stops working straight away, staff and customers have to sign in
-                again at the new one, and no other shop can take the old name for 30 days.
-              </p>
-            </div>
-            <div className="vbg-custom-actions" style={{ marginTop: "var(--vbg-space-5)" }}>
-              <button type="submit" className="vbg-button">
-                Change address
-              </button>
-            </div>
-          </form>
-
-          <form action={setShopPublishedAction} className="vbg-span-7" style={{ marginTop: "var(--vbg-space-8)" }}>
-            <input type="hidden" name="id" value={shop.id} />
-            <input type="hidden" name="customerId" value={id} />
-            <input type="hidden" name="published" value={shop.isPublished ? "false" : "true"} />
-            <p className="vbg-reading">
-              {shop.isPublished
-                ? "The website is online. Offline, every page of it says “not found”, the shop’s own admin included, and it takes no orders. The address stays this shop’s."
-                : "The website is offline: every page of it says “not found” and it takes no orders."}
-            </p>
-            <div className="vbg-custom-actions" style={{ marginTop: "var(--vbg-space-5)" }}>
-              <button type="submit" className="vbg-button">
-                {shop.isPublished ? "Take the website offline" : "Put the website back online"}
-              </button>
-            </div>
-          </form>
-
-          <form action={removeSubdomainAction} className="vbg-span-7" style={{ marginTop: "var(--vbg-space-8)" }}>
-            <input type="hidden" name="id" value={shop.id} />
-            <input type="hidden" name="customerId" value={id} />
-            <p className="vbg-reading">
-              Removing the address leaves the shop with no website and frees one of the
-              customer&rsquo;s subdomain slots. The owner can set one up again from their account.
-            </p>
-            <label className="vbg-custom-choice">
-              <input type="checkbox" name="sure" required />
-              <span>
-                Remove {shop.subdomain}.{STOREFRONT_DOMAIN} from this shop
-              </span>
-            </label>
-            <div className="vbg-custom-actions" style={{ marginTop: "var(--vbg-space-5)" }}>
-              <button type="submit" className="vbg-button">
-                Remove address
-              </button>
-            </div>
-          </form>
-        </section>
-      )}
-
-      {shop.subdomain && (
-        <section className="vbg-section" id="domain">
-          <h2 className="vbg-heading-24">Own domain</h2>
-          <p className="vbg-reading vbg-span-7">
-            A domain the shop owns, such as www.royalkebab.ie, shown as well as its{" "}
-            {STOREFRONT_DOMAIN} address, which keeps working. Saving it here does nothing until the
-            owner points the domain at us, and pointing a domain at us does nothing until it is
-            saved here. Emails to customers and staff go on using the {STOREFRONT_DOMAIN} address.
-          </p>
-
-          <form action={setCustomDomainAction} className="vbg-span-7">
-            <input type="hidden" name="id" value={shop.id} />
-            <input type="hidden" name="customerId" value={id} />
-            <div className="vbg-field">
-              <label className="vbg-label" htmlFor="customDomain">
-                Domain
-              </label>
-              <input
-                id="customDomain"
-                name="customDomain"
-                type="text"
-                defaultValue={shop.customDomain ?? ""}
-                placeholder="www.royalkebab.ie"
-                maxLength={253}
-                autoCapitalize="none"
-                spellCheck={false}
-                aria-describedby="customDomain-help"
-              />
-              <p id="customDomain-help" className="vbg-helper">
-                The address customers should see. With or without &ldquo;www.&rdquo;: the other
-                form is sent to this one. Leave it blank and save to take the domain away.
-              </p>
-            </div>
-            <div className="vbg-custom-actions" style={{ marginTop: "var(--vbg-space-5)" }}>
-              <button type="submit" className="vbg-button">
-                Save domain
-              </button>
-            </div>
-          </form>
-
-          {setup && domainState && (
-            <div className="vbg-span-7" style={{ marginTop: "var(--vbg-space-8)" }}>
-              <p className="vbg-reading">
-                <span className="vbg-custom-status" data-state={domainState.mark}>
-                  {domainState.text}
+          <ul className="vbg-custom-domains vbg-span-7">
+            <li>
+              <div className="vbg-custom-domain">
+                <a href={`https://${shop.subdomain}.${STOREFRONT_DOMAIN}`} target="_blank" rel="noreferrer">
+                  {shop.subdomain}.{STOREFRONT_DOMAIN}
+                  <span className="vbg-visually-hidden"> (opens in a new tab)</span>
+                </a>
+                <span className="vbg-custom-status" data-state={websiteState.mark}>
+                  {websiteState.text}
                 </span>
-                <br />
-                {domainState.more}
-              </p>
+                <span className="vbg-custom-actions">
+                  <DialogButton label="Change" title="Change the address" quiet>
+                    <form action={changeSubdomainAction} className="vbg-custom-dialog-form">
+                      <input type="hidden" name="id" value={shop.id} />
+                      <input type="hidden" name="customerId" value={id} />
+                      <div className="vbg-field">
+                        <label className="vbg-label" htmlFor="subdomain">
+                          Subdomain
+                        </label>
+                        <input
+                          id="subdomain"
+                          name="subdomain"
+                          type="text"
+                          defaultValue={shop.subdomain}
+                          required
+                          minLength={3}
+                          maxLength={63}
+                          pattern="[a-z0-9]+(-[a-z0-9]+)*"
+                          autoCapitalize="none"
+                          spellCheck={false}
+                          aria-describedby="subdomain-help"
+                        />
+                        <p id="subdomain-help" className="vbg-helper">
+                          The part before .{STOREFRONT_DOMAIN}. The old address stops working
+                          straight away, and staff and customers sign in again at the new one.
+                        </p>
+                      </div>
+                      <button type="submit" className="vbg-button">
+                        Change address
+                      </button>
+                    </form>
+                  </DialogButton>
 
-              <h3 className="vbg-label" style={{ marginTop: "var(--vbg-space-6)" }}>
-                The record the owner adds
-              </h3>
-              <RecordTable caption="The DNS record that makes the domain work" record={setup.record} />
-              <p className="vbg-helper">
-                For {setup.record.host}.
-                {setup.record.state === "elsewhere"
-                  ? " The name exists but leads somewhere else. If the domain is on Cloudflare, its record has to be set to “DNS only” (grey cloud)."
-                  : " If the domain is on Cloudflare, the record has to be set to “DNS only” (grey cloud)."}
-              </p>
+                  {shop.isPublished ? (
+                    <DialogButton label="Take offline" title="Take the website offline" quiet>
+                      <form action={setShopPublishedAction} className="vbg-custom-dialog-form">
+                        <input type="hidden" name="id" value={shop.id} />
+                        <input type="hidden" name="customerId" value={id} />
+                        <input type="hidden" name="published" value="false" />
+                        <p className="vbg-reading">
+                          Every page says &ldquo;not found&rdquo;, the shop&rsquo;s own admin included,
+                          and it takes no orders. Nothing is deleted and the address stays this
+                          shop&rsquo;s.
+                        </p>
+                        <button type="submit" className="vbg-button">
+                          Take offline
+                        </button>
+                      </form>
+                    </DialogButton>
+                  ) : (
+                    <form action={setShopPublishedAction}>
+                      <input type="hidden" name="id" value={shop.id} />
+                      <input type="hidden" name="customerId" value={id} />
+                      <input type="hidden" name="published" value="true" />
+                      <button type="submit" className="vbg-custom-link-action">
+                        Put back online
+                      </button>
+                    </form>
+                  )}
 
-              {setup.optional && (
-                <>
-                  <h3 className="vbg-label" style={{ marginTop: "var(--vbg-space-6)" }}>
-                    Optional
-                  </h3>
-                  <p className="vbg-reading">
-                    So that {setup.optional.host} also arrives at {setup.record.host}. The domain
-                    works without it.
-                  </p>
-                  <RecordTable caption="An optional second DNS record" record={setup.optional} />
-                </>
-              )}
-            </div>
-          )}
+                  <DialogButton label="Remove" title="Remove the address" quiet>
+                    <form action={removeSubdomainAction} className="vbg-custom-dialog-form">
+                      <input type="hidden" name="id" value={shop.id} />
+                      <input type="hidden" name="customerId" value={id} />
+                      <p className="vbg-reading">
+                        The shop is left with no website, and one of the customer&rsquo;s subdomain
+                        slots is freed. The menu, orders, staff and photos are kept, and the owner
+                        can set an address up again from their account.
+                      </p>
+                      <label className="vbg-custom-choice">
+                        <input type="checkbox" name="sure" required />
+                        <span>
+                          Remove {shop.subdomain}.{STOREFRONT_DOMAIN} from this shop
+                        </span>
+                      </label>
+                      <button type="submit" className="vbg-button">
+                        Remove address
+                      </button>
+                    </form>
+                  </DialogButton>
+                </span>
+              </div>
+            </li>
+
+            {shop.customDomain && (
+              <li>
+                <div className="vbg-custom-domain">
+                  <a href={`https://${shop.customDomain}`} target="_blank" rel="noreferrer">
+                    {shop.customDomain}
+                    <span className="vbg-visually-hidden"> (opens in a new tab)</span>
+                  </a>
+                  <DomainStatus key={shop.customDomain} shopId={shop.id} />
+                  <span className="vbg-custom-actions">
+                    <DialogButton label="Remove" title="Remove the domain" quiet>
+                      <form action={setCustomDomainAction} className="vbg-custom-dialog-form">
+                        <input type="hidden" name="id" value={shop.id} />
+                        <input type="hidden" name="customerId" value={id} />
+                        <input type="hidden" name="customDomain" value="" />
+                        <p className="vbg-reading">
+                          {shop.customDomain} stops showing this shop within two minutes. The
+                          website stays at {shop.subdomain}.{STOREFRONT_DOMAIN}.
+                        </p>
+                        <button type="submit" className="vbg-button">
+                          Remove domain
+                        </button>
+                      </form>
+                    </DialogButton>
+                  </span>
+                </div>
+              </li>
+            )}
+          </ul>
+          <p className="vbg-helper vbg-span-7">
+            The owner can do all of this from their own account, except remove the{" "}
+            {STOREFRONT_DOMAIN} address.
+          </p>
         </section>
       )}
 

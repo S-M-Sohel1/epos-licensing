@@ -431,3 +431,113 @@
   outline: 2px solid var(--vbg-focus);
   outline-offset: 2px;
 }
+
+/* --------------------------------------------------------------------------
+ * Domains
+ *
+ * A shop's addresses, one to a row: the address, how it is doing, and what can
+ * be done to it. The actions open a dialog instead of sitting open as forms:
+ * they are used rarely, and three stacked forms hid the two facts above them.
+ * -------------------------------------------------------------------------- */
+
+.vbg-custom-domains-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--vbg-space-4);
+}
+
+.vbg-custom-domains {
+  margin: var(--vbg-space-4) 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--vbg-border-subtle);
+}
+
+.vbg-custom-domains > li {
+  padding: var(--vbg-space-4) 0;
+  border-bottom: 1px solid var(--vbg-border-subtle);
+}
+
+.vbg-custom-domain {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: baseline;
+  gap: var(--vbg-space-3) var(--vbg-space-5);
+}
+
+.vbg-custom-domain > a {
+  overflow-wrap: anywhere;
+}
+
+.vbg-custom-domain-state {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--vbg-space-3);
+}
+
+/* The DNS record: under the row, whatever its place in the markup. */
+.vbg-custom-domain-record {
+  grid-column: 1 / -1;
+  order: 1;
+  border: 0;
+  padding: 0;
+}
+
+.vbg-custom-domain-record summary {
+  cursor: pointer;
+  padding: 0;
+  font-size: var(--vbg-type-compact);
+  font-weight: inherit;
+  color: var(--vbg-text-secondary);
+}
+
+.vbg-custom-domain-record .vbg-table-wrap,
+.vbg-custom-domain-record .vbg-helper {
+  margin-top: var(--vbg-space-2);
+}
+
+@media (max-width: 40rem) {
+  .vbg-custom-domain {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.vbg-custom-dialog {
+  width: min(30rem, calc(100vw - 2 * var(--vbg-space-4)));
+  padding: var(--vbg-space-6);
+  border: 1px solid var(--vbg-border-subtle);
+  background: var(--vbg-surface-primary);
+  color: var(--vbg-text-primary);
+}
+
+.vbg-custom-dialog::backdrop {
+  background: rgb(0 0 0 / 0.4);
+}
+
+.vbg-custom-dialog h3 {
+  margin: 0 0 var(--vbg-space-4);
+}
+
+/* Two classes, to outrank `.vbg-custom-actions form`: a dialog opened from a row of actions is
+ * still inside that row in the markup. */
+.vbg-custom-dialog .vbg-custom-dialog-form {
+  display: grid;
+  gap: var(--vbg-space-4);
+  justify-items: start;
+  margin-bottom: var(--vbg-space-4);
+}
+
+.vbg-custom-dialog-form .vbg-field {
+  width: 100%;
+}
+
+.vbg-custom-dialog input[type="text"] {
+  max-width: none;
+}
+
+.vbg-custom-dialog-form p {
+  margin: 0;
+}
+
