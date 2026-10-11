@@ -13,8 +13,15 @@ const templateIdRule = z.nativeEnum(TemplateId).default(TemplateId.general);
  * gated on `Customer.shopLimit`.
  */
 
-// "lic" is the licensing backend (lic.epos-365.com); the other three are near-misses of it.
-const RESERVED_SUBDOMAINS = new Set(["www", "dashboard", "admin", "api", "store", "lic", "licensing", "license", "licence"]);
+// "lic" is the licensing backend (lic.epos-365.com); the next three are near-misses of it.
+// "shops" is what a shop's own domain points at, and "releases" is where the till's installer
+// is downloaded from: both have a DNS record of their own, so a shop there would never be seen.
+// Keep this list the same in the web platform's middleware.ts.
+const RESERVED_SUBDOMAINS = new Set([
+  "www", "dashboard", "admin", "api", "store",
+  "lic", "licensing", "license", "licence",
+  "shops", "releases",
+]);
 
 export const slugRule = z
   .string()
