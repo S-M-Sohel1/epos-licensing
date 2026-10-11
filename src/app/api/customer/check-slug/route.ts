@@ -16,8 +16,12 @@ export async function GET(request: Request): Promise<Response> {
     return json({ ok: false, error: "Not signed in." }, 401);
   }
 
-  const slug = new URL(request.url).searchParams.get("slug");
-  const result = await checkSlugAvailability(slug);
+  const query = new URL(request.url).searchParams;
+  // The shop the name is wanted for, so that a name it gave up itself reads as available.
+  // Only one of the caller's own: anyone else's id is ignored.
+  const shopId = query.get("shopId");
+  const ownShopId = customer.shops.find((shop) => shop.id === shopId)?.id;
+  const result = await checkSlugAvailability(query.get("slug"), ownShopId);
 
   return json({ ok: true, ...result }, 200);
 }

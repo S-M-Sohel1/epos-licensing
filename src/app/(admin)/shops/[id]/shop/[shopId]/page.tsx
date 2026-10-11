@@ -3,15 +3,21 @@ import { notFound } from "next/navigation";
 
 import { Notice, readNotice } from "~/app/_components/notice";
 import { describeExpiry, formatDate, formatDateTime } from "~/app/_lib/format";
-import { setShopTemplateAction, updateShopAction } from "~/server/actions/shops";
+import {
+  changeSubdomainAction,
+  removeSubdomainAction,
+  setShopPublishedAction,
+  setShopTemplateAction,
+  updateShopAction,
+} from "~/server/actions/shops";
 import { db } from "~/server/db";
-import { getShopConnection, TEMPLATE_LABELS, type WebsiteState } from "~/server/shop-connection";
+import { getShopConnection, STOREFRONT_DOMAIN, TEMPLATE_LABELS, type WebsiteState } from "~/server/shop-connection";
 
 export const dynamic = "force-dynamic";
 
 const WEBSITE_STATE: Record<WebsiteState, { text: string; mark: string }> = {
-  published: { text: "Published", mark: "approved" },
-  not_published: { text: "Set up, not published yet", mark: "pending" },
+  published: { text: "Online", mark: "approved" },
+  not_published: { text: "Offline", mark: "pending" },
   none: { text: "No website yet", mark: "none" },
 };
 
@@ -158,6 +164,86 @@ export default async function ShopPage({
           </ul>
         )}
       </section>
+
+      {shop.subdomain && (
+        <section className="vbg-section" id="address">
+          <h2 className="vbg-heading-24">Website address</h2>
+          <p className="vbg-reading vbg-span-7">
+            The owner can change the address and take the website offline from their own account.
+            Only this page can remove the address. None of these delete anything: the menu, orders,
+            staff and photos belong to the shop, not to its address.
+          </p>
+
+          <form action={changeSubdomainAction} className="vbg-span-7">
+            <input type="hidden" name="id" value={shop.id} />
+            <input type="hidden" name="customerId" value={id} />
+            <div className="vbg-field">
+              <label className="vbg-label" htmlFor="subdomain">
+                Subdomain
+              </label>
+              <input
+                id="subdomain"
+                name="subdomain"
+                type="text"
+                defaultValue={shop.subdomain}
+                required
+                minLength={3}
+                maxLength={63}
+                pattern="[a-z0-9]+(-[a-z0-9]+)*"
+                autoCapitalize="none"
+                spellCheck={false}
+                aria-describedby="subdomain-help"
+              />
+              <p id="subdomain-help" className="vbg-helper">
+                The part before .{STOREFRONT_DOMAIN}. Lowercase letters, numbers and single hyphens.
+                The old address stops working straight away, staff and customers have to sign in
+                again at the new one, and no other shop can take the old name for 30 days.
+              </p>
+            </div>
+            <div className="vbg-custom-actions" style={{ marginTop: "var(--vbg-space-5)" }}>
+              <button type="submit" className="vbg-button">
+                Change address
+              </button>
+            </div>
+          </form>
+
+          <form action={setShopPublishedAction} className="vbg-span-7" style={{ marginTop: "var(--vbg-space-8)" }}>
+            <input type="hidden" name="id" value={shop.id} />
+            <input type="hidden" name="customerId" value={id} />
+            <input type="hidden" name="published" value={shop.isPublished ? "false" : "true"} />
+            <p className="vbg-reading">
+              {shop.isPublished
+                ? "The website is online. Offline, every page of it says “not found”, the shop’s own admin included, and it takes no orders. The address stays this shop’s."
+                : "The website is offline: every page of it says “not found” and it takes no orders."}
+            </p>
+            <div className="vbg-custom-actions" style={{ marginTop: "var(--vbg-space-5)" }}>
+              <button type="submit" className="vbg-button">
+                {shop.isPublished ? "Take the website offline" : "Put the website back online"}
+              </button>
+            </div>
+          </form>
+
+          <form action={removeSubdomainAction} className="vbg-span-7" style={{ marginTop: "var(--vbg-space-8)" }}>
+            <input type="hidden" name="id" value={shop.id} />
+            <input type="hidden" name="customerId" value={id} />
+            <p className="vbg-reading">
+              Removing the address leaves the shop with no website and frees one of the
+              customer&rsquo;s subdomain slots. The owner can set one up again from their account.
+            </p>
+            <label className="vbg-custom-choice">
+              <input type="checkbox" name="sure" required />
+              <span>
+                Remove {shop.subdomain}.{STOREFRONT_DOMAIN} from this shop
+              </span>
+            </label>
+            <div className="vbg-custom-actions" style={{ marginTop: "var(--vbg-space-5)" }}>
+              <button type="submit" className="vbg-button">
+                Remove address
+              </button>
+            </div>
+          </form>
+        </section>
+      )}
 
       <section className="vbg-section" id="template">
         <h2 className="vbg-heading-24">Website template</h2>

@@ -46,8 +46,9 @@ model Shop {
     phone       String?
     notes       String?
 
-    /// "royalkebab" — validated slug, immutable once published. Null until a
-    /// subdomain is activated; most shops may never have one.
+    /// "royalkebab" — validated slug. Null until a subdomain is activated; most
+    /// shops may never have one. Changed or removed only through
+    /// `server/shops.ts`, which keeps the old name reserved (RetiredSubdomain).
     subdomain String? @unique
     /// e.g. "royalkebab.ie" — null until the owner connects a custom domain.
     customDomain String? @unique
@@ -556,6 +557,19 @@ model ContactDetails {
     updatedAt DateTime @updatedAt
     /// The admin's email, as on an AuditEvent.
     updatedBy String?
+}
+
+/// A subdomain a shop used to have, kept so that nobody else can take it straight away. The
+/// old address is on printed menus, in bookmarks and in search results for a while after a
+/// change, and a different shop answering at it would be taking another shop's customers.
+/// Held for 30 days from `retiredAt` (see `server/shops.ts`); the shop it belonged to may take
+/// it back at any time. Rows are not deleted when the 30 days are up, only ignored.
+model RetiredSubdomain {
+    subdomain String   @id
+    shopId    String
+    retiredAt DateTime @default(now())
+
+    @@index([shopId])
 }
 
 enum AuditEventType {
