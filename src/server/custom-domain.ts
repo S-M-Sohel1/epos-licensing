@@ -134,10 +134,9 @@ export interface DomainSetup {
   record: DnsRecord;
   /**
    * The same domain with or without "www.", which is sent on to the saved one if the owner
-   * points it here too. Worth having, never needed. Null for a name further down a domain
-   * (`order.royalkebab.ie`), where nobody types a "www." in front.
+   * points it here too. Worth having, never needed.
    */
-  optional: DnsRecord | null;
+  optional: DnsRecord;
 }
 
 // Short waits: this runs while a page is being built.
@@ -224,10 +223,9 @@ export async function domainSetup(domain: string, subdomain: string | null): Pro
       () => null,
     ),
   ]);
-  const paired = domain === zone || domain === `www.${zone}`;
   const [record, optional] = await Promise.all([
     recordFor(domain, zone, serverAddress),
-    paired ? recordFor(other, zone, serverAddress) : null,
+    recordFor(other, zone, serverAddress),
   ]);
 
   const live = shown !== null && shown === subdomain;

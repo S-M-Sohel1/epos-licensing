@@ -81,7 +81,8 @@ function Record({ record }: { record: DnsRecord }) {
  * has loaded (the check takes seconds), and again on "Check again".
  *
  * The record is tucked away once it is right: nobody needs it then. Until it is, it is open,
- * with one sentence saying what to do about the state it is in.
+ * with one sentence saying what to do about the state it is in. Under it, always in sight, is
+ * the offer of the same domain with (or without) "www.", and the record for that.
  */
 export function DomainStatus({ shopId }: { shopId: string }) {
   const [setup, setSetup] = useState<DomainSetup | null>(null);
@@ -136,15 +137,21 @@ export function DomainStatus({ shopId }: { shopId: string }) {
         <summary>DNS record</summary>
         {help && <p className="vbg-helper">{help}</p>}
         <Record record={setup.record} />
-        {setup.optional && setup.optional.state !== "valid" && (
-          <>
-            <p className="vbg-helper">
-              Optional: this second record makes {setup.optional.host} lead to {setup.record.host} too.
-            </p>
-            <Record record={setup.optional} />
-          </>
-        )}
       </details>
+      {setup.optional.state === "valid" ? (
+        <p className="vbg-custom-domain-record vbg-helper">
+          {setup.optional.host} leads to {setup.record.host} too.
+        </p>
+      ) : (
+        <details className="vbg-custom-domain-record">
+          <summary>Optional: make {setup.optional.host} work too</summary>
+          <p className="vbg-helper">
+            With this second record, {setup.optional.host} takes visitors to {setup.record.host}. The
+            domain works without it.
+          </p>
+          <Record record={setup.optional} />
+        </details>
+      )}
     </>
   );
 }
