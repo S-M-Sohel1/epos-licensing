@@ -22,6 +22,12 @@ const HELP: Partial<Record<DnsRecord["state"], string>> = {
   elsewhere: "The domain exists but leads somewhere else. Change its record to this one.",
 };
 
+/** The second, optional record: the same words, but one that is simply not there is no cause for concern. */
+const OPTIONAL: Record<DnsRecord["state"], { text: string; mark: string }> = {
+  ...STATUS,
+  missing: { text: "Not added", mark: "none" },
+};
+
 /** One word for the whole domain: how the website is doing if the record is right, the record's own state if not. */
 function overall(setup: DomainSetup) {
   return STATUS[setup.record.state === "valid" ? setup.status : setup.record.state];
@@ -140,11 +146,19 @@ export function DomainStatus({ shopId }: { shopId: string }) {
       </details>
       {setup.optional.state === "valid" ? (
         <p className="vbg-custom-domain-record vbg-helper">
-          {setup.optional.host} leads to {setup.record.host} too.
+          <span className="vbg-custom-status" data-state="approved">
+            Valid
+          </span>{" "}
+          · {setup.optional.host} leads to {setup.record.host} too.
         </p>
       ) : (
         <details className="vbg-custom-domain-record">
-          <summary>Optional: make {setup.optional.host} work too</summary>
+          <summary>
+            Optional: make {setup.optional.host} work too ·{" "}
+            <span className="vbg-custom-status" data-state={OPTIONAL[setup.optional.state].mark}>
+              {OPTIONAL[setup.optional.state].text}
+            </span>
+          </summary>
           <p className="vbg-helper">
             With this second record, {setup.optional.host} takes visitors to {setup.record.host}. The
             domain works without it.
