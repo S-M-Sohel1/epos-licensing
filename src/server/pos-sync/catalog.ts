@@ -218,8 +218,10 @@ export function parsePush(body: unknown, now = Date.now()): ParseResult {
           priceCents: Math.round(v.price * 100),
           // Whatever the till says, a product sold by weight or at a price typed at the till
           // has no fixed online price, so it is never offered online. Enforced here as well as
-          // on the till: this is the side that cannot be bypassed.
-          active: v.active && v.showonline && !v.isweightbased && !v.isopenprice,
+          // on the till: this is the side that cannot be bypassed. The same goes for a product
+          // with no price at all: at 0 it is a price nobody has set yet, not a free item.
+          active:
+            v.active && v.showonline && !v.isweightbased && !v.isopenprice && Math.round(v.price * 100) > 0,
           sortOrder: v.sortorder,
           imageHash: v.imagehash ?? null,
           posUpdatedAt: v.updatedat,

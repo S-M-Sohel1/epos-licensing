@@ -282,6 +282,7 @@ async function main() {
       { id: "item-weighed", values: product(food, "Loose olives", 12, t0, { IsWeightBased: 1 }) },
       { id: "item-open", values: product(food, "Misc", 0, t0, { IsOpenPrice: 1 }) },
       { id: "item-hidden-online", values: product(food, "Staff meal", 4, t0, { ShowOnline: 0 }) },
+      { id: "item-unpriced", values: product(food, "New line", 0, t0) },
     ],
   });
   const credsA1 = { key: a.license.key, deviceId: tillA1.deviceId };
@@ -378,13 +379,14 @@ async function main() {
   checkEqual("accepted", first.status, 200);
   checkEqual("the shop's catalogue is at version 1", first.body.version, 1);
   checkEqual("both categories applied", first.body.applied?.categories, 2);
-  checkEqual("all sixteen items applied", first.body.applied?.items, 16);
-  checkEqual("staged under shop A", (await itemsOf(a.shop.id)).length, 16);
+  checkEqual("all seventeen items applied", first.body.applied?.items, 17);
+  checkEqual("staged under shop A", (await itemsOf(a.shop.id)).length, 17);
   checkEqual("nothing staged under shop B", (await itemsOf(b.shop.id)).length, 0);
   checkEqual("9.95 is staged as 995 cents", (await itemOf(a.shop.id, "item-cents"))?.priceCents, 995);
   checkEqual("a weighed product is not offered online", (await itemOf(a.shop.id, "item-weighed"))?.active, false);
   checkEqual("an open-price product is not offered online", (await itemOf(a.shop.id, "item-open"))?.active, false);
   checkEqual("a product switched off for online is not offered", (await itemOf(a.shop.id, "item-hidden-online"))?.active, false);
+  checkEqual("a product with no price is not offered online", (await itemOf(a.shop.id, "item-unpriced"))?.active, false);
   checkEqual("an ordinary product is offered", (await itemOf(a.shop.id, "item-01"))?.active, true);
   const categories = await db.$queryRaw<{ posId: string; active: boolean }[]>`
     SELECT "posId", "active" FROM pos_sync.catalog_category WHERE "shopId" = ${a.shop.id}`;
@@ -401,7 +403,7 @@ async function main() {
       onMenu = await db.$queryRaw`
         SELECT "name", "priceCents", "isAvailable" FROM storefront."MenuItem" WHERE "shopId" = ${a.shop.id}`;
     }
-    checkEqual("the shop's menu on the website has all sixteen items, with no sweep", onMenu.length, 16);
+    checkEqual("the shop's menu on the website has all seventeen items, with no sweep", onMenu.length, 17);
     checkEqual("at the till's price", onMenu.find((i) => i.name === "Kebab")?.priceCents, 995);
     checkEqual("a product not offered online is on the menu as unavailable", onMenu.find((i) => i.name === "Loose olives")?.isAvailable, false);
     const otherShops = await db.$queryRaw<{ count: bigint }[]>`
