@@ -35,7 +35,8 @@
     "verify:pos-till": "tsx --env-file=.env scripts/verify-pos-till.ts",
     "verify:password-reset": "tsx --env-file=.env scripts/verify-password-reset.ts",
     "verify:email-verification": "tsx --env-file=.env scripts/verify-email-verification.ts",
-    "verify:subdomain": "tsx --env-file=.env scripts/verify-subdomain.ts"
+    "verify:subdomain": "tsx --env-file=.env scripts/verify-subdomain.ts",
+    "verify:google-signin": "tsx --env-file=.env scripts/verify-google-signin.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.7.2",

@@ -237,6 +237,140 @@ export async function signInCustomer(input: unknown): Promise<CustomerAuthResult
   };
 }
 
+const googleSchema = z.object({
+  email: emailRule,
+  name: z.string().trim().max(120).optional(),
+  businessName: z.string().trim().min(1, "Business name is required.").max(120).optional(),
+  phone: z.string().trim().max(40).optional(),
+});
+
+export interface GoogleSignInResult extends CustomerAuthResult {
+  /** Nobody has this address and no business name came with it: ask for one and call again. */
+  needsDetails?: boolean;
+  /** This call made the account. */
+  created?: boolean;
+}
+
+/**
+ * Signs in whoever Google says owns this email address, making the account if there is none.
+ *
+ * The caller is the corporate website's server, after Google has told it the address is
+ * verified. Nothing here can check that again, which is why the route in front of this takes
+ * the secret the two servers share: without it, this would hand out any account by its email.
+ *
+ * Accounts are matched by email address alone, so an owner who registered with a password
+ * lands in that same account, with its shops and licence, and the password goes on working.
+ *
+ * One exception. If the account's address was never confirmed, nobody has shown that the
+ * person who typed its password owns the address. Somebody could register with another
+ * person's address and wait for them to arrive through Google. So the first Google sign-in on
+ * such an account confirms the address, clears the password and ends every session. The real
+ * owner sets a new one through "Forgot password" if they want one.
+ *
+ * A new account needs a business name, which Google does not have. Without one the answer is
+ * `needsDetails`: the website asks for it and calls again.
+ */
+export async function signInWithGoogle(input: unknown): Promise<GoogleSignInResult> {
+  const parsed = googleSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message };
+  }
+  const { email, name, businessName, phone } = parsed.data;
+
+  const existing = await db.customer.findUnique({ where: { email }, include: { shops: true } });
+
+  if (!existing) {
+    if (!businessName) return { ok: false, needsDetails: true };
+
+    const { customer, shop } = await db.$transaction(
+      async (tx) => {
+        const customer = await tx.customer.create({
+          data: { email, name: nameOrNull(name), emailVerifiedAt: new Date() },
+        });
+        const shop = await tx.shop.create({
+          data: { name: businessName, email, phone: phone ?? null, customerId: customer.id },
+        });
+        await tx.auditEvent.create({
+          data: {
+            type: AuditEventType.customer_registered,
+            actor: "client",
+            summary: `${businessName} signed up with Google`,
+          },
+        });
+        return { customer, shop };
+      },
+      { timeout: 15_000 },
+    );
+
+    const session = await createSession(customer.id);
+    return {
+      ok: true,
+      created: true,
+      token: session.token,
+      expires: session.expires,
+      customer: {
+        id: customer.id,
+        email,
+        name: customer.name,
+        shopId: shop.id,
+        shopName: shop.name,
+        shopLimit: customer.shopLimit,
+        subdomain: shop.subdomain,
+        isPublished: shop.isPublished,
+        emailVerified: true,
+        shops: [toShopSummary(shop)],
+      },
+    };
+  }
+
+  const shop = existing.shops[0];
+  if (!shop) return { ok: false, error: "This account has no shop on it yet. Please contact us." };
+
+  const givenName = existing.name ?? nameOrNull(name);
+
+  if (existing.emailVerifiedAt === null) {
+    await db.$transaction([
+      db.customer.update({
+        where: { id: existing.id },
+        data: { emailVerifiedAt: new Date(), passwordHash: null, name: givenName },
+      }),
+      db.customerSession.deleteMany({ where: { customerId: existing.id } }),
+      ...(existing.passwordHash
+        ? [
+            db.auditEvent.create({
+              data: {
+                type: AuditEventType.customer_updated,
+                actor: "client",
+                summary: `${shop.name}: password cleared at the first Google sign-in, as its email had never been confirmed`,
+              },
+            }),
+          ]
+        : []),
+    ]);
+  } else if (givenName !== existing.name) {
+    await db.customer.update({ where: { id: existing.id }, data: { name: givenName } });
+  }
+
+  const session = await createSession(existing.id);
+  return {
+    ok: true,
+    token: session.token,
+    expires: session.expires,
+    customer: {
+      id: existing.id,
+      email,
+      name: givenName,
+      shopId: shop.id,
+      shopName: shop.name,
+      shopLimit: existing.shopLimit,
+      subdomain: shop.subdomain,
+      isPublished: shop.isPublished,
+      emailVerified: true,
+      shops: existing.shops.map(toShopSummary),
+    },
+  };
+}
+
 /** Resolves a bearer token to its customer, or null if missing/expired/unknown. */
 export async function customerFromSessionToken(
   token: string | null,
