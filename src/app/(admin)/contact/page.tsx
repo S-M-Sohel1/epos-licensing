@@ -83,6 +83,33 @@ export default async function ContactPage({
         </section>
 
         <section className="vbg-section">
+          <h2 className="vbg-heading-24">Website</h2>
+
+          <div className="vbg-span-7" style={{ marginTop: "var(--vbg-space-4)" }}>
+            <div className="vbg-field">
+              <label className="vbg-label" htmlFor="demoUrl">
+                Live example link
+              </label>
+              <input
+                id="demoUrl"
+                name="demoUrl"
+                type="url"
+                autoComplete="off"
+                maxLength={300}
+                placeholder="https://demo.epos-365.com/"
+                defaultValue={details?.demoUrl ?? ""}
+                aria-describedby="demoUrl-help"
+              />
+              <p id="demoUrl-help" className="vbg-helper">
+                Where the &ldquo;See a live example&rdquo; button on the website&rsquo;s home page goes: a
+                shop visitors can look around. It opens in a new tab. Left blank, it goes to
+                https://demo.epos-365.com/.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section className="vbg-section">
           <h2 className="vbg-heading-24">Business details</h2>
           <p className="vbg-span-7">
             Printed in the website&rsquo;s privacy policy and terms of service, which have to say who is
