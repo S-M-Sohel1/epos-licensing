@@ -16,11 +16,12 @@ const templateIdRule = z.nativeEnum(TemplateId).default(TemplateId.general);
 // "lic" is the licensing backend (lic.epos-365.com); the next three are near-misses of it.
 // "shops" is what a shop's own domain points at, and "releases" is where the till's installer
 // is downloaded from: both have a DNS record of their own, so a shop there would never be seen.
+// "crash" is the till's crash collector (crash.epos-365.com), served by its own Caddy route.
 // Keep this list the same in the web platform's middleware.ts.
 const RESERVED_SUBDOMAINS = new Set([
   "www", "dashboard", "admin", "api", "store",
   "lic", "licensing", "license", "licence",
-  "shops", "releases",
+  "shops", "releases", "crash",
 ]);
 
 export const slugRule = z
