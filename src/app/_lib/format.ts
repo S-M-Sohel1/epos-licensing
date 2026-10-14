@@ -1,9 +1,10 @@
 import type { Device, License } from "generated/prisma";
 
 /**
- * One date format across the whole panel. UTC because every stored timestamp is
- * UTC and a support conversation comparing the panel against a till's own
- * License screen must not have to reconcile two time zones.
+ * A calendar date, such as the last day of a licence. Read in UTC on purpose: a
+ * licence's last day is stored as 23:59:59 UTC on that day, which in Irish summer
+ * time is already the next morning, so reading it in Irish time would show every
+ * licence ending a day late.
  */
 export function formatDate(value: Date | null | undefined): string {
   if (!value) return "never";
@@ -15,6 +16,12 @@ export function formatDate(value: Date | null | undefined): string {
   }).format(value);
 }
 
+/**
+ * A moment, such as when a till checked in or crashed, on the clock in Ireland
+ * (Irish summer time from late March to late October, otherwise the same as UTC),
+ * where the shops and the people answering their calls are. Every stored
+ * timestamp is UTC; this is the one place it is turned into a time to read.
+ */
 export function formatDateTime(value: Date | null | undefined): string {
   if (!value) return "never";
   return new Intl.DateTimeFormat("en-GB", {
@@ -23,7 +30,7 @@ export function formatDateTime(value: Date | null | undefined): string {
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-    timeZone: "UTC",
+    timeZone: "Europe/Dublin",
     hour12: false,
   }).format(value);
 }
