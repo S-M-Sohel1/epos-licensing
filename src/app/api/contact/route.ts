@@ -28,5 +28,6 @@ export async function GET() {
     legalName: details?.legalName ?? null,
     companyNumber: details?.companyNumber ?? null,
     address: details?.address ?? null,
+    demoUrl: details?.demoUrl ?? null,
   });
 }

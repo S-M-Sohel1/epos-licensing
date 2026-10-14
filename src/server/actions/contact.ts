@@ -53,6 +53,21 @@ const contactSchema = z.object({
   privacyEmail: optionalEmail("The privacy email is not an email address."),
   legalName: optionalText(160, "That business name is too long."),
   companyNumber: optionalText(40, "That company number is too long."),
+  // A visitor clicks it, so only a plain https link to a web page.
+  demoUrl: z
+    .string()
+    .trim()
+    .max(300, "That link is too long.")
+    .refine((value) => {
+      if (value === "") return true;
+      try {
+        const url = new URL(value);
+        return url.protocol === "https:" && !url.username && !url.password;
+      } catch {
+        return false;
+      }
+    }, "The live example link must be a web address starting with https://, like https://demo.epos-365.com/.")
+    .transform((value) => (value === "" ? null : value)),
   // One line on the website, so line breaks typed here become ", ".
   address: z
     .string()
@@ -76,6 +91,7 @@ const FIELD_NAMES = {
   legalName: "business name",
   companyNumber: "company number",
   address: "address",
+  demoUrl: "live example link",
 } as const;
 
 type FieldKey = keyof typeof FIELD_NAMES;
@@ -90,6 +106,7 @@ export async function saveContactDetailsAction(formData: FormData): Promise<void
     legalName: formValue(formData, "legalName"),
     companyNumber: formValue(formData, "companyNumber"),
     address: formValue(formData, "address"),
+    demoUrl: formValue(formData, "demoUrl"),
   });
 
   if (!parsed.success) {

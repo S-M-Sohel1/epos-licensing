@@ -554,6 +554,10 @@ model ContactDetails {
     address       String?
     privacyEmail  String?
 
+    /// Where the website's "See a live example" button goes: a shop on the platform to look
+    /// around. https only. Null until saved; the website then uses its own default.
+    demoUrl String?
+
     updatedAt DateTime @updatedAt
     /// The admin's email, as on an AuditEvent.
     updatedBy String?
