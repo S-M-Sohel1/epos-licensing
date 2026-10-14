@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { SidebarNav } from "~/app/_components/sidebar-nav";
 import { auth, signOut } from "~/server/auth";
+import { countRecentCrashes } from "~/server/crashes";
 import { db } from "~/server/db";
 
 /**
@@ -22,7 +23,10 @@ export default async function AdminLayout({
   const session = await auth();
   if (!session?.user?.email) redirect("/signin");
 
-  const pending = await db.device.count({ where: { status: "pending" } });
+  const [pending, recentCrashes] = await Promise.all([
+    db.device.count({ where: { status: "pending" } }),
+    countRecentCrashes(),
+  ]);
 
   return (
     <div className="vbg-custom-app">
@@ -36,7 +40,7 @@ export default async function AdminLayout({
           <span className="vbg-custom-brand-role">Licensing</span>
         </Link>
 
-        <SidebarNav pendingCount={pending} />
+        <SidebarNav pendingCount={pending} crashCount={recentCrashes} />
 
         <div className="vbg-custom-sidebar-user">
           <span className="vbg-custom-sidebar-user-email">
