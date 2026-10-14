@@ -79,6 +79,18 @@ export const env = createEnv({
      * menu still catches up within a minute from that app's own sweep.
      */
     WEB_PLATFORM_URL: z.string().url().optional(),
+
+    /**
+     * The tills' crash collector (Bugsink at crash.epos-365.com) and a token for
+     * it that may only read the tills' project (issues and events, nothing
+     * else). Read by the Crashes page on the server, never sent to a browser.
+     * Without the token the page says it is not connected.
+     */
+    CRASH_COLLECTOR_URL: z.string().url().default("https://crash.epos-365.com"),
+    CRASH_COLLECTOR_TOKEN: z
+      .string()
+      .regex(/^[0-9a-f]{40}$/, "must be the collector's 40-character token")
+      .optional(),
     /**
      * For the till's order nudge over Supabase Realtime. The same three values
      * the corporate website's server holds: the project URL, its publishable
@@ -118,6 +130,8 @@ export const env = createEnv({
     R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY,
     R2_PUBLIC_BASE_URL: process.env.R2_PUBLIC_BASE_URL,
     WEB_PLATFORM_URL: process.env.WEB_PLATFORM_URL,
+    CRASH_COLLECTOR_URL: process.env.CRASH_COLLECTOR_URL,
+    CRASH_COLLECTOR_TOKEN: process.env.CRASH_COLLECTOR_TOKEN,
     SUPABASE_URL: process.env.SUPABASE_URL,
     SUPABASE_PUBLISHABLE_KEY: process.env.SUPABASE_PUBLISHABLE_KEY,
     REALTIME_SIGNING_KEY: process.env.REALTIME_SIGNING_KEY,
