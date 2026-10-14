@@ -6,7 +6,7 @@ import { listRecentCrashes } from "~/server/crashes";
 export const dynamic = "force-dynamic";
 
 /**
- * The tills' unexpected crashes, newest first, read from the crash collector
+ * The tills' unexpected crashes and staff's problem reports, newest first, read from the crash collector
  * (crash.epos-365.com). Only what a till did not expect is here: a printer that
  * was off or no internet stays in that till's own log.
  *
@@ -22,9 +22,11 @@ export default async function CrashesPage() {
       <section className="vbg-section">
         <h1 className="vbg-title">Crashes</h1>
         <p className="vbg-lede vbg-span-7">
-          Errors the tills did not expect, most recently seen first. Open one in
-          the crash collector for where in the code it happened and what the
-          till was doing just before.
+          Errors the tills did not expect, and problems staff reported from a
+          till&rsquo;s &ldquo;Report a problem&rdquo; form, most recently seen
+          first. Open one in the crash collector for the full detail: where in
+          the code it happened, or the report&rsquo;s own words and the
+          till&rsquo;s log.
         </p>
       </section>
 
@@ -44,6 +46,7 @@ export default async function CrashesPage() {
                 <span className="vbg-mono vbg-meta">{formatDateTime(crash.lastSeen)}</span>
                 <span>
                   <strong>{crash.type.replace(/^System\./, "")}</strong>: {crash.message}
+                  {crash.isProblemReport ? " (sent by staff)" : ""}
                   <br />
                   <span className="vbg-custom-feed-detail">
                     {crash.till ? (
