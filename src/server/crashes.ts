@@ -2,7 +2,7 @@ import { env } from "~/env";
 import { db } from "~/server/db";
 
 /**
- * The tills' crashes, read from the crash collector at crash.epos-365.com (Bugsink; see
+ * The tills' crashes, and the problems staff reported from a till's "Report a problem" form, read from the crash collector at crash.epos-365.com (Bugsink; see
  * `pos_customized/Crash_Reporting_Plan.md`, 3c). Read here on the server with a token that may
  * only read the tills' project, never from the browser.
  *
@@ -12,11 +12,14 @@ import { db } from "~/server/db";
 
 const PROJECT_ID = 1;
 const ISSUES_SHOWN = 25;
+const PROBLEM_REPORT_PREFIX = "Problem report: ";
 
 export type Crash = {
   id: string;
   /** "EPOS-365-TILL-3", what the collector calls it. */
   reference: string;
+  /** A till's "Report a problem" form rather than a crash. */
+  isProblemReport: boolean;
   type: string;
   message: string;
   firstSeen: Date;
@@ -125,11 +128,14 @@ export async function listRecentCrashes(): Promise<CrashList> {
     crashes: issues.map((issue, index) => {
       const detail = details[index];
       const device = detail?.deviceId ? byDeviceId.get(detail.deviceId) : undefined;
+      // The till sends a problem report as a message whose text starts with this.
+      const isProblemReport = issue.calculated_value.startsWith(PROBLEM_REPORT_PREFIX);
       return {
         id: issue.id,
         reference: issue.friendly_id,
-        type: issue.calculated_type,
-        message: issue.calculated_value,
+        isProblemReport,
+        type: isProblemReport ? "Problem report" : issue.calculated_type,
+        message: isProblemReport ? issue.calculated_value.slice(PROBLEM_REPORT_PREFIX.length) : issue.calculated_value,
         firstSeen: new Date(issue.first_seen),
         lastSeen: new Date(issue.last_seen),
         count: issue.digested_event_count,
