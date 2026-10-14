@@ -1,3 +1,5 @@
+import { unstable_cache } from "next/cache";
+
 import { env } from "~/env";
 import { db } from "~/server/db";
 
@@ -96,6 +98,36 @@ async function newestOccurrence(issueId: string) {
     return null;
   }
 }
+
+/**
+ * How many crashes and problem reports were seen in the last 24 hours and are not marked fixed:
+ * the red count on the sidebar's Crashes tab. One call to the collector, kept for a minute so
+ * every page of the panel does not ask again, and given 3 seconds at most so a slow collector
+ * never slows the panel. Zero when it cannot be read: the Crashes page itself says why.
+ */
+export const countRecentCrashes = unstable_cache(
+  async (): Promise<number> => {
+    if (!env.CRASH_COLLECTOR_TOKEN) return 0;
+    try {
+      const response = await fetch(
+        `${collectorBase()}/api/canonical/0/issues/?project=${PROJECT_ID}&sort=last_seen&order=desc`,
+        {
+          headers: { authorization: `Bearer ${env.CRASH_COLLECTOR_TOKEN}` },
+          signal: AbortSignal.timeout(3_000),
+          cache: "no-store",
+        },
+      );
+      if (!response.ok) return 0;
+      const page = (await response.json()) as { results: BugsinkIssue[] };
+      const since = Date.now() - 24 * 60 * 60 * 1000;
+      return page.results.filter((issue) => !issue.is_resolved && new Date(issue.last_seen).getTime() >= since).length;
+    } catch {
+      return 0;
+    }
+  },
+  ["recent-crash-count"],
+  { revalidate: 60 },
+);
 
 /** The most recently seen crashes, newest first. */
 export async function listRecentCrashes(): Promise<CrashList> {

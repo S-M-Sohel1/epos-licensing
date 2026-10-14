@@ -84,7 +84,8 @@
   align-items: baseline;
   justify-content: space-between;
   gap: var(--vbg-space-3);
-  padding: var(--vbg-space-2) var(--vbg-space-3);
+  /* A little under space-2 top and bottom, so all ten sections fit a laptop screen unscrolled. */
+  padding: calc(var(--vbg-space-2) * 0.75) var(--vbg-space-3);
   border-left: 2px solid transparent;
   color: var(--vbg-text-secondary);
   font-size: var(--vbg-type-body);
@@ -121,6 +122,30 @@
 
 .vbg-custom-sidebar-nav a[aria-current="page"] .vbg-custom-sidebar-count {
   color: var(--vbg-text-primary);
+}
+
+/* The one count that is a warning: crashes and problem reports in the last day. Unlike a queue
+ * depth it should catch the eye of someone who never opens the page unprompted, so it is a red
+ * capsule. */
+.vbg-custom-sidebar-alert {
+  min-width: 1.5em;
+  padding: 0 0.45em;
+  border-radius: 999px;
+  background: var(--vbg-color-error);
+  color: #fff;
+  font-size: var(--vbg-type-metadata);
+  font-weight: var(--vbg-weight-medium);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+  text-align: center;
+  align-self: center;
+}
+
+/* A thin rule between the sidebar's groups. */
+.vbg-custom-sidebar-group-start {
+  margin-top: var(--vbg-space-2);
+  padding-top: var(--vbg-space-2);
+  border-top: 1px solid var(--vbg-border-subtle);
 }
 
 .vbg-custom-sidebar-user {
