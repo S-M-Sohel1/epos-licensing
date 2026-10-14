@@ -19,6 +19,7 @@ export function SidebarNav({ pendingCount }: { pendingCount: number }) {
     { href: "/shops", label: "Customers" },
     { href: "/quotes", label: "Quote requests" },
     { href: "/releases", label: "Releases" },
+    { href: "/crashes", label: "Crashes" },
     { href: "/pricing", label: "Pricing" },
     { href: "/contact", label: "Contact details" },
     { href: "/audit", label: "Audit log" },
