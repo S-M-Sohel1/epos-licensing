@@ -2,6 +2,8 @@ import { DeviceStatus } from "generated/prisma";
 import { db } from "~/server/db";
 
 export interface CustomerLicenseSummary {
+  /** What the owner types into the till to activate it. Theirs to see: their dashboard shows it. */
+  key: string;
   status: "active" | "blocked";
   validUntil: Date;
   maxDevices: number;
@@ -26,6 +28,7 @@ export async function latestLicenseSummary(
   if (!license) return null;
 
   return {
+    key: license.key,
     status: license.status,
     validUntil: license.validUntil,
     maxDevices: license.maxDevices,
