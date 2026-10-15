@@ -48,7 +48,8 @@ function summary(total: number, waiting: number): string {
  * with no customer account, which the Customers list does not show either.
  *
  * "Contacted" is the one thing an admin changes here, so the list answers the
- * question it exists for: who has not been rung back yet.
+ * question it exists for: who has not been rung back yet. Each row also links
+ * straight to the next step: a licence for that shop, or the one it has.
  */
 export default async function QuotesPage({
   searchParams,
@@ -65,7 +66,15 @@ export default async function QuotesPage({
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
-      include: { shop: { include: { customer: true } } },
+      include: {
+        shop: {
+          include: {
+            customer: true,
+            // Whether the shop already has a licence decides the row's shortcut: give it one, or open it.
+            licenses: { select: { id: true, key: true }, orderBy: { createdAt: "desc" }, take: 1 },
+          },
+        },
+      },
     }),
     db.quoteRequest.count(),
     db.quoteRequest.count({ where: { contactedAt: null } }),
@@ -199,6 +208,17 @@ export default async function QuotesPage({
                               </button>
                             )}
                           </form>
+                        </div>
+                        {/* The usual next step after the call: the licence form with this shop already chosen,
+                            or the licence it already has. */}
+                        <div style={{ marginTop: "var(--vbg-space-2)" }}>
+                          {shop.licenses[0] ? (
+                            <Link href={`/licenses/${shop.licenses[0].id}`} className="vbg-meta">
+                              License {shop.licenses[0].key}
+                            </Link>
+                          ) : (
+                            <Link href={`/licenses/new?shopId=${shop.id}`}>Give this shop a license</Link>
+                          )}
                         </div>
                       </td>
                     </tr>
