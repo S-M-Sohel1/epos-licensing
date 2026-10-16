@@ -6,6 +6,7 @@ import { z } from "zod";
 import { AuditEventType } from "generated/prisma";
 import { db } from "~/server/db";
 import { customerPasswordRule, setCustomerPassword } from "~/server/customer/auth";
+import { emailOwner, ownerEmailNotice } from "~/server/web-platform";
 
 import { formValue, redirectWithNotice, requireAdmin } from "./shared";
 
@@ -128,6 +129,7 @@ export async function updateCustomerAction(formData: FormData): Promise<void> {
     );
   }
 
+  const before = await db.customer.findUnique({ where: { id }, select: { shopLimit: true } });
   const customer = await db.customer.update({
     where: { id },
     data: { name, email: email ?? null, shopLimit },
@@ -141,8 +143,22 @@ export async function updateCustomerAction(formData: FormData): Promise<void> {
     },
   });
 
+  // Only a raised allowance is news to the owner: they can now add a web address.
+  let emailNotice = "";
+  if (before && shopLimit > before.shopLimit) {
+    const emailed = customer.email
+      ? await emailOwner({
+          kind: "web_address_limit_raised",
+          to: customer.email,
+          name: customer.name ?? undefined,
+          limit: shopLimit,
+        })
+      : "no_email";
+    emailNotice = ownerEmailNotice(emailed);
+  }
+
   revalidatePath("/shops");
-  redirectWithNotice(`/shops/${customer.id}`, `${customer.name} updated.`, "success");
+  redirectWithNotice(`/shops/${customer.id}`, `${customer.name} updated.${emailNotice}`, "success");
 }
 
 const setPasswordSchema = z.object({ password: customerPasswordRule });

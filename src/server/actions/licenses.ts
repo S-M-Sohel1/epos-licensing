@@ -1,12 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { AuditEventType } from "generated/prisma";
 import { db } from "~/server/db";
 import { generateLicenseKey } from "~/server/licensing/license-key";
+import { emailOwner, ownerEmailNotice } from "~/server/web-platform";
 
 import { formValue, redirectWithNotice, requireAdmin } from "./shared";
 
@@ -38,7 +38,7 @@ export async function createLicenseAction(formData: FormData): Promise<void> {
     );
   }
 
-  const shop = await db.shop.findUnique({ where: { id: parsed.data.shopId } });
+  const shop = await db.shop.findUnique({ where: { id: parsed.data.shopId }, include: { customer: true } });
   if (!shop)
     redirectWithNotice("/licenses/new", "That shop no longer exists.");
 
@@ -63,8 +63,21 @@ export async function createLicenseAction(formData: FormData): Promise<void> {
     },
   });
 
+  // Tell the owner their licence is ready; the key itself stays on their dashboard.
+  const owner = shop.customer;
+  const emailed = owner?.email
+    ? await emailOwner({
+        kind: "licence_issued",
+        to: owner.email,
+        name: owner.name ?? undefined,
+        shopName: shop.name,
+        tills: license.maxDevices,
+        validUntil: license.validUntil.toISOString(),
+      })
+    : "no_email";
+
   revalidatePath("/licenses");
-  redirect(`/licenses/${license.id}`);
+  redirectWithNotice(`/licenses/${license.id}`, `License issued.${ownerEmailNotice(emailed)}`, emailed === "sent" ? "success" : "error");
 }
 
 /**
