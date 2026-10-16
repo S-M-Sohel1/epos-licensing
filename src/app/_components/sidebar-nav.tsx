@@ -10,19 +10,30 @@ import { usePathname } from "next/navigation";
  * section needs the live pathname. Everything it renders is still plain links,
  * so it works before hydration.
  */
-export function SidebarNav({ pendingCount, crashCount }: { pendingCount: number; crashCount: number }) {
+export function SidebarNav({
+  pendingCount,
+  quoteCount,
+  crashCount,
+}: {
+  pendingCount: number;
+  quoteCount: number;
+  crashCount: number;
+}) {
   const pathname = usePathname();
 
   // In order of how often the operator acts on each, in three groups with a rule between them:
   // what is waiting on someone, support, and set-up that rarely changes. Releases is last: the
   // developer publishes till versions there, not the operator.
-  const items: { href: string; label: string; count?: number; alert?: boolean; groupStart?: boolean }[] = [
+  // A count's capsule says how urgent it is: plain for a queue, blue for new requests to ring back,
+  // red for crashes.
+  const items: { href: string; label: string; count?: number; tone?: "new" | "alert"; groupStart?: boolean }[] = [
     { href: "/", label: "Approvals", count: pendingCount },
-    { href: "/quotes", label: "Quote requests" },
+    // Blue while a request has not been marked as contacted (Quote requests page).
+    { href: "/quotes", label: "Quote requests", count: quoteCount, tone: "new" },
     { href: "/shops", label: "Customers" },
     { href: "/licenses", label: "Licenses" },
     // Red when a till crashed or staff reported a problem in the last day (server/crashes.ts).
-    { href: "/crashes", label: "Crashes", count: crashCount, alert: true, groupStart: true },
+    { href: "/crashes", label: "Crashes", count: crashCount, tone: "alert", groupStart: true },
     { href: "/pricing", label: "Pricing", groupStart: true },
     { href: "/contact", label: "Contact details" },
     { href: "/admins", label: "Administrators" },
@@ -50,9 +61,11 @@ export function SidebarNav({ pendingCount, crashCount }: { pendingCount: number;
               >
                 <span>{item.label}</span>
                 {item.count ? (
-                  <span className={item.alert ? "vbg-custom-sidebar-alert" : "vbg-custom-sidebar-count"}>
+                  <span className={item.tone ? `vbg-custom-sidebar-${item.tone}` : "vbg-custom-sidebar-count"}>
                     {item.count}
-                    <span className="vbg-visually-hidden">{item.alert ? " in the last day" : " waiting"}</span>
+                    <span className="vbg-visually-hidden">
+                      {item.tone === "alert" ? " in the last day" : item.tone === "new" ? " not contacted yet" : " waiting"}
+                    </span>
                   </span>
                 ) : null}
               </Link>

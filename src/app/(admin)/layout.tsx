@@ -23,8 +23,10 @@ export default async function AdminLayout({
   const session = await auth();
   if (!session?.user?.email) redirect("/signin");
 
-  const [pending, recentCrashes] = await Promise.all([
+  const [pending, newQuotes, recentCrashes] = await Promise.all([
     db.device.count({ where: { status: "pending" } }),
+    // Not rung back yet: what the Quote requests page lists first.
+    db.quoteRequest.count({ where: { contactedAt: null } }),
     countRecentCrashes(),
   ]);
 
@@ -40,7 +42,7 @@ export default async function AdminLayout({
           <span className="vbg-custom-brand-role">Licensing</span>
         </Link>
 
-        <SidebarNav pendingCount={pending} crashCount={recentCrashes} />
+        <SidebarNav pendingCount={pending} quoteCount={newQuotes} crashCount={recentCrashes} />
 
         <div className="vbg-custom-sidebar-user">
           <span className="vbg-custom-sidebar-user-email">

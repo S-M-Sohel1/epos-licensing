@@ -124,9 +124,10 @@
   color: var(--vbg-text-primary);
 }
 
-/* The one count that is a warning: crashes and problem reports in the last day. Unlike a queue
- * depth it should catch the eye of someone who never opens the page unprompted, so it is a red
- * capsule. */
+/* Counts that should catch the eye of someone who never opens the page unprompted are capsules:
+ * blue for new quote requests nobody has rung back yet, red for the one warning, crashes and
+ * problem reports in the last day. */
+.vbg-custom-sidebar-new,
 .vbg-custom-sidebar-alert {
   min-width: 1.5em;
   padding: 0 0.45em;
@@ -139,6 +140,10 @@
   line-height: 1.5;
   text-align: center;
   align-self: center;
+}
+
+.vbg-custom-sidebar-new {
+  background: var(--vbg-color-info);
 }
 
 /* A thin rule between the sidebar's groups. */
